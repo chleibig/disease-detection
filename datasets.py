@@ -42,7 +42,7 @@ class Dataset(object):
         ----------
         indices : array-like, shape = (n_samples,)
             with respect to the entire data set
-        batchsize : int
+        batch_size : int
         shuffle : boolean (False by default)
             shuffle indices
 
@@ -54,14 +54,14 @@ class Dataset(object):
 
         Notes
         -----
-        Currently len(indices)%batchsize samples are not used!
+        Currently len(indices)%batch_size samples are not used!
 
         """
 
         if shuffle:
             np.random.shuffle(indices)
-        for start_idx in range(0, len(indices) - batchsize + 1, batchsize):
-            excerpt = indices[start_idx:start_idx + batchsize]
+        for start_idx in range(0, len(indices) - batch_size + 1, batch_size):
+            excerpt = indices[start_idx:start_idx + batch_size]
             yield self.load_batch(excerpt)
 
 
@@ -147,7 +147,7 @@ class KaggleDR(Dataset):
         Parameters
         ----------
 
-        indices : array_like, shape = (batchsize,)
+        indices : array_like, shape = (batch_size,)
             absolute index values refer to position in trainLabels.csv
 
         """
