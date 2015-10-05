@@ -34,7 +34,43 @@ class Dataset(object):
 
         """
 
-    def iterate_minibatches(self, indices, batchsize, shuffle=False):
+    def generate_indices(self, train_frac, val_frac, test_frac, shuffle=False):
+        """Generate indices for training, validation and test data.
+
+        Parameters
+        ----------
+        train_frac, val_frac, test_frac : scalars, values between 0 and 1
+            fraction of data that should be used for training, validation
+            and testing respectively
+        shuffle : boolean (False by default)
+            shuffle indices
+
+        Returns
+        -------
+        train_indices, val_indices, test_indices : numpy arrays,
+                                                    shape = (n_samples,)
+
+        """
+
+        assert train_frac + val_frac + test_frac <= 1.0
+
+        train_size = int(np.ceil(self.n_samples*train_frac))
+        val_size = int(np.ceil(self.n_samples*val_frac))
+        test_size = int(np.ceil(self.n_samples*test_frac))
+
+        indices = np.arange(self.n_samples)
+        if shuffle:
+            np.random.shuffle(indices)
+
+        train_indices = indices[:train_size]
+        val_indices = indices[train_size:train_size + val_size]
+        test_indices = indices[train_size + val_size:min(train_size +
+                                                         val_size + test_size,
+                                                         self.n_samples)]
+
+        return train_indices, val_indices, test_indices
+
+    def iterate_minibatches(self, indices, batch_size, shuffle=False):
         """
         Generator that yields a batch of data together with labels
 
