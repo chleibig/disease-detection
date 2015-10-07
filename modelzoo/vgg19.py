@@ -8,9 +8,15 @@
 # Download pretrained weights from:
 # https://s3.amazonaws.com/lasagne/recipes/pretrained/imagenet/vgg19.pkl
 
+import warnings
+
 from lasagne.layers import InputLayer, DenseLayer, NonlinearityLayer
 from lasagne.layers import set_all_param_values
-from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
+try:
+    from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
+except ImportError:
+    warnings.warn("cuDNN not available, using theano's conv2d instead.")
+    from lasagne.layers import Conv2DLayer as ConvLayer
 from lasagne.layers import Pool2DLayer as PoolLayer
 from lasagne.nonlinearities import softmax
 
