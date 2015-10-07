@@ -110,7 +110,7 @@ class KaggleDR(Dataset):
     def __init__(self, path_data=None, filename_targets=None):
         self.path_data = path_data
         self.filename_targets = filename_targets
-        labels = pd.read_csv(self.filename_targets)
+        labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
         self.image_filenames = labels['image']
         self.y = np.array(labels['level'])
         self._n_samples = len(self.y)
