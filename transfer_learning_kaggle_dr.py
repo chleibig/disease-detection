@@ -14,6 +14,8 @@ def main(path=None):
     import theano
     import theano.tensor as T
     import lasagne
+    from lasagne.layers import DenseLayer, NonlinearityLayer
+    from lasagne.nonlinearities import softmax
 
     from modelzoo import vgg19
     from datasets import KaggleDR
@@ -38,9 +40,8 @@ def main(path=None):
     ###########################################################################
     # Transfer Learning: Adjust output layer to new task
     ###########################################################################
-    # network['fc8'] = DenseLayer(network['fc7'], num_units=5,
-    # nonlinearity=None)
-    # network['prob'] = NonlinearityLayer(network['fc8'], softmax)
+    network['fc8'] = DenseLayer(network['fc7'], num_units=5, nonlinearity=None)
+    network['prob'] = NonlinearityLayer(network['fc8'], softmax)
     output_layer = network['prob']
 
     # plug symbolic input to network
@@ -55,7 +56,11 @@ def main(path=None):
     loss = lasagne.objectives.categorical_crossentropy(prediction, target_var)
     loss = loss.mean()
 
-    params = lasagne.layers.get_all_params(output_layer, trainable=True)
+    ###########################################################################
+    # Retrain only parameters of the last layer
+    ###########################################################################
+    params = network['fc8'].get_params()
+
     updates = lasagne.updates.nesterov_momentum(loss, params,
                                                 learning_rate=0.01,
                                                 momentum=0.9)
