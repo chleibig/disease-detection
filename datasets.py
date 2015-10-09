@@ -112,8 +112,14 @@ class KaggleDR(Dataset):
         self.filename_targets = filename_targets
         labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
         self.image_filenames = labels['image']
+        # we store all labels
         self.y = np.array(labels['level'])
         self._n_samples = len(self.y)
+        # we might cache some data later on
+        self.X = None
+        # because self.X might be a subset of the entire data set, we track
+        # wich samples we have cached
+        self.indices_in_X = None
 
     @property
     def n_samples(self):
@@ -188,9 +194,34 @@ class KaggleDR(Dataset):
 
         """
 
-        X = np.array([self.prep_image(self.load_image(fn)) for fn in
-                      self.image_filenames[indices]])
-        y = self.y[indices]
-        assert len(X) == len(y) == len(indices)
-        return X, y
+        if self.indices_in_X is not None and self.X is not None:
+            # map indices [0, n_all_samples] to [0, n_stored_samples] while
+            # preserving order
+            select_from_cached = np.array(
+                  [np.where(self.indices_in_X == idx)[0][0] for idx in indices]
+            )
+            assert len(select_from_cached) == len(indices)
+            return self.X[select_from_cached], self.y[indices]
 
+        else:
+            X = np.array([self.prep_image(self.load_image(fn)) for fn in
+                          self.image_filenames[indices]])
+            y = self.y[indices]
+            assert len(X) == len(y) == len(indices)
+            return X, y
+
+    def load_data(self, indices):
+        """
+        Load data, preprocess and cache data
+
+        Parameters
+        ----------
+
+        indices : array_like, shape = (n_samples,)
+            absolute index values refer to position in trainLabels.csv
+
+        """
+
+        self.X = np.array([self.prep_image(self.load_image(fn)) for fn in
+                           self.image_filenames[indices]])
+        self.indices_in_X = indices
