@@ -145,14 +145,13 @@ class KaggleDR(Dataset):
         return np.array(Image.open(filename))
 
     @staticmethod
-    def prep_image(im):
+    def prepare_image(im):
         """
-        Preprocess image.
+        Prepare image.
 
-        Resizes smaller spatial extent to 256 pixels while preserving the
-        aspect ratio. Central part of image is cropped to 224 x 224.
-        No mean subtraction. Colour channels are inverted: RGB -> BGR
-        Dimensions get reordered.
+        Dimensions get reordered according to theano/lasagne conventions
+        Colour channels are inverted: RGB -> BGR
+        cast to floatX
 
         Parameters
         ----------
@@ -165,17 +164,6 @@ class KaggleDR(Dataset):
 
         """
 
-        # Resize so smallest dim = 256, preserving aspect ratio
-        h, w, _ = im.shape
-        if h < w:
-            im = skimage.transform.resize(im, (256, w*256/h),
-                                          preserve_range=True)
-        else:
-            im = skimage.transform.resize(im, (h*256/w, 256),
-                                          preserve_range=True)
-        # Central crop to 224x224
-        h, w, _ = im.shape
-        im = im[h//2-112:h//2+112, w//2-112:w//2+112]
         # Returned image should be (n_channels, n_rows, n_columns)
         im = np.transpose(im, (2, 0, 1))
         # Convert to BGR
@@ -204,7 +192,7 @@ class KaggleDR(Dataset):
             return self.X[select_from_cached], self.y[indices]
 
         else:
-            X = np.array([self.prep_image(self.load_image(fn)) for fn in
+            X = np.array([self.prepare_image(self.load_image(fn)) for fn in
                           self.image_filenames[indices]])
             y = self.y[indices]
             assert len(X) == len(y) == len(indices)
@@ -222,6 +210,6 @@ class KaggleDR(Dataset):
 
         """
 
-        self.X = np.array([self.prep_image(self.load_image(fn)) for fn in
+        self.X = np.array([self.prepare_image(self.load_image(fn)) for fn in
                            self.image_filenames[indices]])
         self.indices_in_X = indices
