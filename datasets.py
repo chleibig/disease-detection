@@ -87,16 +87,13 @@ class Dataset(object):
             batch of data
         y : numpy array, shape = (n_samples,)
 
-        Notes
-        -----
-        Currently len(indices)%batch_size samples are not used!
-
         """
 
         if shuffle:
             np.random.shuffle(indices)
-        for start_idx in range(0, len(indices) - batch_size + 1, batch_size):
-            excerpt = indices[start_idx:start_idx + batch_size]
+        for start_idx in range(0, len(indices), batch_size):
+            excerpt = indices[start_idx:min(start_idx + batch_size,
+                                            len(indices))]
             yield self.load_batch(excerpt)
 
 
