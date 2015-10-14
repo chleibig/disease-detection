@@ -49,7 +49,7 @@ def main(source_dir, filename_targets, batch_size, outfile, last_layer):
     kdr.load_data(idx)
     print('took {:6.1f} seconds'.format(time.time() - start_time))
 
-    outputs = np.empty_like(kdr.X)
+    outputs = np.empty((kdr.n_samples, output_layer.num_units))
     i = 0
     n_batches = np.ceil(kdr.n_samples/batch_size)
     print("Computing features of", kdr.n_samples, "sample(s)...")
