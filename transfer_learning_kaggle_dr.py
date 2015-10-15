@@ -11,12 +11,15 @@ import click
 @click.command()
 @click.option('--path', default=None, show_default=True,
               help="Path to trainLabels.csv and extracted_features.npy.")
-def main(path):
+@click.option('--model_file', default='model.npz', show_default=True,
+              help="Filename for model dump.")
+def main(path, model_file):
     """Perform transfer learning on Kaggle's Diabetic Retinopathy competition.
     """
 
     import os
     import time
+    import numpy as np
     import theano
     import theano.tensor as T
     import lasagne
@@ -144,6 +147,8 @@ def main(path):
     print("  test accuracy:\t\t{:.2f} %".format(
         test_acc / test_batches * 100))
 
+    np.savez(os.path.join(path, model_file),
+             *lasagne.layers.get_all_param_values(network))
 
 if __name__ == '__main__':
     main()
