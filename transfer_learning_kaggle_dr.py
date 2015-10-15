@@ -1,6 +1,6 @@
 from __future__ import print_function
 
-import argparse
+import click
 
 # TODO: - resolve memory issue -> check theano docu on python memory management
 # TODO: - set trainable tag of convnet params to false
@@ -8,7 +8,13 @@ import argparse
 # TODO: - use both left and right eye data for each patient
 
 
-def main(path=None):
+@click.command()
+@click.option('--path', default=None, show_default=True,
+              help="Path to trainLabels.csv and extracted_features.npy.")
+def main(path):
+    """Perform transfer learning on Kaggle's Diabetic Retinopathy competition.
+    """
+
     import os
     import time
     import theano
@@ -140,13 +146,4 @@ def main(path=None):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Transfer-learning: Adapt "
-                                                 "VGG19 net to Kaggle's "
-                                                 "Diabetic Retinopathy "
-                                                 "competition.")
-    parser.add_argument("path", help="path to folder train and file "
-                                     "trainLabels.csv")
-    args = parser.parse_args()
-
-    main(path=args.path)
-
+    main()
