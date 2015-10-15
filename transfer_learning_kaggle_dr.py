@@ -11,9 +11,15 @@ import click
 @click.command()
 @click.option('--path', default=None, show_default=True,
               help="Path to trainLabels.csv and extracted_features.npy.")
+@click.option('--batch_size', default=2, show_default=True)
+@click.option('--n_epoch', default=100, show_default=True,
+              help="Number of epochs for training and validation.")
+@click.option('--split', nargs=3, type=float, default=(0.8, 0.1, 0.1),
+              help="Fraction of samples to be used for train, val and test "
+                   "respectively.")
 @click.option('--model_file', default='model.npz', show_default=True,
               help="Filename for model dump.")
-def main(path, model_file):
+def main(path, batch_size, n_epoch, split, model_file):
     """Perform transfer learning on Kaggle's Diabetic Retinopathy competition.
     """
 
@@ -32,11 +38,7 @@ def main(path, model_file):
     ###########################################################################
     # Parameters
     ###########################################################################
-    n_epoch = 500
-    batch_size = 1
-    train_frac = 0.08
-    val_frac = 0.01
-    test_frac = 0.01
+    train_frac, val_frac, test_frac = split
 
     # Prepare theano variables for inputs and targets
     input_var = T.tensor4('inputs')
