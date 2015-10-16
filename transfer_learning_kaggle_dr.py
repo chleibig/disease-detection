@@ -4,7 +4,7 @@ import click
 
 @click.command()
 @click.option('--path', default=None, show_default=True,
-              help="Path to trainLabels.csv and extracted_features.npy.")
+              help="Path to trainLabels.csv and feature_activations.npy.")
 @click.option('--batch_size', default=2, show_default=True)
 @click.option('--n_epoch', default=100, show_default=True,
               help="Number of epochs for training and validation.")
@@ -37,7 +37,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     kdr = KaggleDR(path_data=os.path.join(path, 'train'),
                    filename_targets=os.path.join(path, 'trainLabels.csv'))
 
-    kdr.X = floatX(np.load(os.path.join(path, 'extracted_features.npy')))
+    kdr.X = floatX(np.load(os.path.join(path, 'feature_activations.npy')))
     n_samples, n_features = kdr.X.shape
     # assert that we have features for all labels stored in kdr.y
     assert n_samples == kdr.n_samples
