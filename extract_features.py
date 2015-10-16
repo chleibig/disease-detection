@@ -43,12 +43,7 @@ def main(source_dir, filename_targets, batch_size, outfile, last_layer):
 
     kdr = KaggleDR(path_data=source_dir, filename_targets=filename_targets)
 
-    start_time = time.time()
     idx = np.arange(kdr.n_samples)
-    print("Loading images from {}...".format(source_dir))
-    kdr.load_data(idx)
-    print('took {:6.1f} seconds'.format(time.time() - start_time))
-
     outputs = np.empty((kdr.n_samples, output_layer.num_units))
     i = 0
     n_batches = np.ceil(kdr.n_samples/batch_size)
