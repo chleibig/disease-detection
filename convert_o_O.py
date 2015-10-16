@@ -123,6 +123,9 @@ def save(img, fname):
 @click.option('--n_proc', default=2, show_default=True,
               help="Number of processes for parallelization.")
 def main(directory, convert_directory, crop_size, extension, n_proc):
+    """Image preprocessing according to team o_O:
+       Resize and crop images to square, save with desired extension.
+    """
 
     try:
         os.mkdir(convert_directory)

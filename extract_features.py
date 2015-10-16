@@ -26,6 +26,7 @@ import numpy as np
 @click.option('--last_layer', default='fc7', show_default=True,
               help="Layer up to which features shall be computed.")
 def main(source_dir, filename_targets, batch_size, outfile, last_layer):
+    """Perform forward pass through network and save extracted features"""
     import theano
     import theano.tensor as T
     import lasagne
