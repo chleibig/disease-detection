@@ -2,7 +2,7 @@ from __future__ import division
 import numpy as np
 
 
-def kappa(labels_rater_1, labels_rater_2, num_classes):
+def quadratic_weighted_kappa(labels_rater_1, labels_rater_2, num_classes):
     """
     Calculates the quadratic weighted kappa value,
 
@@ -26,7 +26,7 @@ def kappa(labels_rater_1, labels_rater_2, num_classes):
 
     Returns
     -------
-    kappa : scalar, values [-1,1]
+    quadratic_weighted_kappa : scalar, values [-1,1]
 
     """
 
