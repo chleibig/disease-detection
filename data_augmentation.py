@@ -1,3 +1,4 @@
+from __future__ import division
 import click
 import numpy as np
 from PIL import Image
@@ -6,6 +7,7 @@ import skimage
 import skimage.transform
 from skimage.transform._warps_cy import _warp_fast
 import os
+import pandas as pd
 
 # channel standard deviations
 STD = np.array([70.53946096, 51.71475228, 43.03428563],
@@ -19,10 +21,6 @@ U = np.array([[-0.56543481, 0.71983482, 0.40240142],
               [-0.56694071, -0.6935729, 0.44423429]],
              dtype=theano.config.floatX)
 EV = np.array([1.65513492, 0.48450358, 0.1565086], dtype=theano.config.floatX)
-# set of resampling weights that yields balanced classes
-BALANCE_WEIGHTS = np.array([1.3609453700116234,  14.378223495702006,
-                            6.637566137566138, 40.235967926689575,
-                            49.612994350282484])
 
 no_augmentation_params = {
     'zoom_range': (1.0, 1.0),
@@ -184,6 +182,46 @@ def load_augment(fname, w, h, aug_params=no_augmentation_params,
     return img
 
 
+def augment_labels(filename_labels_org, filename_labels_aug):
+    """Augment label.csv file for data augmentation
+
+    Parameters
+    ----------
+    filename_labels_org : string
+        file with original labels
+    filename_labels_aug : string
+        file to save original plus augmented labels to
+
+    """
+
+    labels_org = pd.read_csv(filename_labels_org, dtype={'level': np.int32})
+    y = labels_org['level']
+
+    classes = np.unique(y)
+    n_samples = len(y)
+    priors = np.array([np.count_nonzero(y == c_k) for c_k in classes])\
+             /n_samples
+    balance_weights = 1/priors
+    n_aug = np.ceil(balance_weights - 1).astype(np.int32)
+    n_wanted = np.multiply(balance_weights, priors * n_samples).astype(
+        np.int32)
+    n_total = (priors * n_samples).astype(np.int32)
+    labels_aug = labels_org.copy()
+    #TODO: Preallocate size of final labels_aug instead of appending
+    for i, k in enumerate(y):
+        if n_total[k] < n_wanted[k]:
+            n_aug_k = min(n_aug[k], n_wanted[k] - n_total[k])
+            org_file = labels_org['image'][i]
+            aug_files = [org_file+'_aug_'+str(j) for j in range(n_aug_k)]
+            aug_labels = [k] * n_aug_k
+            to_append = pd.DataFrame(zip(aug_files, aug_labels),
+                                     columns=['image', 'level'])
+            labels_aug = labels_aug.append(to_append, ignore_index=True)
+            n_total[k] += n_aug_k
+
+    labels_aug.to_csv(filename_labels_aug)
+
+
 @click.command()
 @click.option('--directory',
               default='/home/vaneeda/Desktop/sample_o_O',
@@ -205,11 +243,9 @@ def main(directory):
         fname = os.path.join(directory, fname)
         aug_img = load_augment(fname, 224, 224, aug_params=aug_params,
                                sigma=0.1)
-        np.multiply(aug_img, STD[:, np.newaxis, np.newaxis], out=aug_img)
-        np.add(aug_img, MEAN[:, np.newaxis, np.newaxis], out=aug_img)
-        aug_img = aug_img.transpose(2, 1, 0)
-        Image.fromarray(np.uint8(aug_img)).save(fname.split('.')[0] +
-                                                "_aug.jpeg")
+        # aug_img = aug_img.transpose(2, 1, 0)
+        # consider to refactor prepare_image of KaggleDR class
+
 
 if __name__ == '__main__':
     main()
