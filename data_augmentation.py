@@ -6,19 +6,18 @@ import skimage
 import skimage.transform
 from skimage.transform._warps_cy import _warp_fast
 import os
-import matplotlib.pyplot as plt
-
 
 # channel standard deviations
-STD = np.array([70.53946096, 51.71475228, 43.03428563], dtype=theano.config.floatX)
-
+STD = np.array([70.53946096, 51.71475228, 43.03428563],
+               dtype=theano.config.floatX)
 # channel means
-MEAN = np.array([108.64628601, 75.86886597, 54.34005737], dtype=theano.config.floatX)
-
+MEAN = np.array([108.64628601, 75.86886597, 54.34005737],
+                dtype=theano.config.floatX)
 # for color augmentation, computed with make_pca.py
 U = np.array([[-0.56543481, 0.71983482, 0.40240142],
               [-0.5989477, -0.02304967, -0.80036049],
-              [-0.56694071, -0.6935729, 0.44423429]], dtype=theano.config.floatX)
+              [-0.56694071, -0.6935729, 0.44423429]],
+             dtype=theano.config.floatX)
 EV = np.array([1.65513492, 0.48450358, 0.1565086], dtype=theano.config.floatX)
 # set of resampling weights that yields balanced classes
 BALANCE_WEIGHTS = np.array([1.3609453700116234,  14.378223495702006,
@@ -52,32 +51,43 @@ def build_centering_transform(image_shape, target_shape):
     trows, tcols = target_shape
     shift_x = (cols - tcols) / 2.0
     shift_y = (rows - trows) / 2.0
-    return skimage.transform.SimilarityTransform(translation=(shift_x, shift_y))
+    return skimage.transform.SimilarityTransform(
+        translation=(shift_x, shift_y))
 
 
 def build_center_uncenter_transforms(image_shape):
     """
-    These are used to ensure that zooming and rotation happens around the center of the image.
-    Use these transforms to center and uncenter the image around such a transform.
+    These are used to ensure that zooming and rotation happens around the
+    center of the image. Use these transforms to center and uncenter the
+    image around such a transform.
     """
-    center_shift = np.array([image_shape[1], image_shape[0]]) / 2.0 - 0.5  # need to swap rows and cols here apparently! confusing!
-    tform_uncenter = skimage.transform.SimilarityTransform(translation=-center_shift)
-    tform_center = skimage.transform.SimilarityTransform(translation=center_shift)
+
+    # need to swap rows and cols here apparently! confusing!
+    center_shift = np.array([image_shape[1], image_shape[0]]) / 2.0 - 0.5
+    tform_uncenter = skimage.transform.SimilarityTransform(
+        translation=-center_shift)
+    tform_center = skimage.transform.SimilarityTransform(
+        translation=center_shift)
     return tform_center, tform_uncenter
 
 
-def build_augmentation_transform(zoom=(1.0, 1.0), rotation=0, shear=0, translation=(0, 0), flip=False):
+def build_augmentation_transform(zoom=(1.0, 1.0), rotation=0, shear=0,
+                                 translation=(0, 0), flip=False):
     if flip:
         shear += 180
         rotation += 180
         # shear by 180 degrees is equivalent to rotation by 180 degrees + flip.
         # So after that we rotate it another 180 degrees to get just the flip.
 
-    tform_augment = skimage.transform.AffineTransform(scale=(1/zoom[0], 1/zoom[1]), rotation=np.deg2rad(rotation), shear=np.deg2rad(shear), translation=translation)
+    tform_augment = skimage.transform.AffineTransform(
+        scale=(1/zoom[0], 1/zoom[1]), rotation=np.deg2rad(rotation),
+        shear=np.deg2rad(shear), translation=translation)
     return tform_augment
 
 
-def random_perturbation_transform(zoom_range, rotation_range, shear_range, translation_range, do_flip=True, allow_stretch=False, rng=np.random):
+def random_perturbation_transform(zoom_range, rotation_range, shear_range,
+                                  translation_range, do_flip=True,
+                                  allow_stretch=False, rng=np.random):
     shift_x = rng.uniform(*translation_range)
     shift_y = rng.uniform(*translation_range)
     translation = (shift_x, shift_y)
@@ -103,10 +113,12 @@ def random_perturbation_transform(zoom_range, rotation_range, shear_range, trans
         zoom_y = np.exp(rng.uniform(*log_zoom_range))
     else:
         zoom_x = zoom_y = np.exp(rng.uniform(*log_zoom_range))
-    # the range should be multiplicatively symmetric, so [1/1.1, 1.1] instead of [0.9, 1.1] makes more sense.
+    # the range should be multiplicatively symmetric, so [1/1.1, 1.1]
+    # instead of [0.9, 1.1] makes more sense.
 
     return build_augmentation_transform((zoom_x, zoom_y), rotation, shear,
-                                     translation, flip)
+                                        translation, flip)
+
 
 def perturb(img, augmentation_params, target_shape, rng=np.random):
     # # DEBUG: draw a border to see where the image ends up
@@ -117,8 +129,10 @@ def perturb(img, augmentation_params, target_shape, rng=np.random):
     shape = img.shape[1:]
     tform_centering = build_centering_transform(shape, target_shape)
     tform_center, tform_uncenter = build_center_uncenter_transforms(shape)
-    tform_augment = random_perturbation_transform(rng=rng, **augmentation_params)
-    tform_augment = tform_uncenter + tform_augment + tform_center  # shift to center, augment, shift back (for the rotation/shearing)
+    tform_augment = random_perturbation_transform(rng=rng,
+                                                  **augmentation_params)
+    # shift to center, augment, shift back (for the rotation/shearing)
+    tform_augment = tform_uncenter + tform_augment + tform_center
     return fast_warp(img, tform_centering + tform_augment,
                      output_shape=target_shape,
                      mode='constant')
@@ -129,7 +143,8 @@ def perturb_fixed(img, tform_augment, target_shape=(50, 50)):
     shape = img.shape[1:]
     tform_centering = build_centering_transform(shape, target_shape)
     tform_center, tform_uncenter = build_center_uncenter_transforms(shape)
-    tform_augment = tform_uncenter + tform_augment + tform_center  # shift to center, augment, shift back (for the rotation/shearing)
+    # shift to center, augment, shift back (for the rotation/shearing)
+    tform_augment = tform_uncenter + tform_augment + tform_center
     return fast_warp(img, tform_centering + tform_augment,
                      output_shape=target_shape, mode='constant')
 
@@ -156,7 +171,8 @@ def load_augment(fname, w, h, aug_params=no_augmentation_params,
     (color_vec).
     To generate a random augmentation specify aug_params and sigma.
     """
-    img = np.array(Image.open(fname), dtype=theano.config.floatX).transpose(2, 1, 0)
+    img = np.array(Image.open(fname), dtype=theano.config.floatX)\
+        .transpose(2, 1, 0)
     if transform is None:
         img = perturb(img, augmentation_params=aug_params, target_shape=(w, h))
     else:
