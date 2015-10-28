@@ -5,7 +5,6 @@ import click
 import numpy as np
 from PIL import Image
 import theano
-import skimage
 import skimage.transform
 from skimage.transform._warps_cy import _warp_fast
 import pandas as pd
@@ -160,6 +159,7 @@ def augment_color(img, sigma=0.1, color_vec=None):
     noise = np.dot(U, alpha.T)
     return img + noise[:, np.newaxis, np.newaxis]
 
+
 def load_image(filename):
     """Load image
 
@@ -169,11 +169,12 @@ def load_image(filename):
 
     Returns
     -------
-    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+    image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
                                                            theano.config.floatX
     """
     return np.array(Image.open(filename), dtype=theano.config.floatX)\
-            .transpose(2, 1, 0)
+        .transpose(2, 0, 1)
+
 
 def standard_normalize(image):
     """Normalize image to have zero mean and unit variance.
@@ -182,12 +183,12 @@ def standard_normalize(image):
 
     Parameters
     ----------
-    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+    image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
                                                            theano.config.floatX
 
     Returns
     -------
-    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+    image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
                                                            theano.config.floatX
     """
 
@@ -207,22 +208,35 @@ def augment(img, w, h, aug_params=NO_AUGMENTATION_PARAMS,
 
     Parameters
     ----------
-    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+    image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
                                                            theano.config.floatX
         source image
 
     Returns
     -------
-    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+    image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
                                                            theano.config.floatX
         transformed image
 
+    Note
+    ----
+    Kaggle DR data is occasionally flipped along the horizontal axis due to
+    differences in acquisition systems. Therefore, the preferred axis to
+    flip along for augmentation is as well the horizontal one. Flipping is
+    implemented via shearing by 180 degrees followed by a
+    rotation by 180 degrees, requiring the input image to be transposed.
+    Therefore this function temporarily transposes row and column directions.
+
     """
+
+    img = img.transpose(0, 2, 1)
 
     if transform is None:
         img = perturb(img, augmentation_params=aug_params, target_shape=(w, h))
     else:
         img = perturb_fixed(img, tform_augment=transform, target_shape=(w, h))
+
+    img = img.transpose(0, 2, 1)
 
     img = standard_normalize(img)
 
@@ -280,48 +294,52 @@ def augment_labels(filename_labels_org, filename_labels_aug):
               help="Directory with original images.")
 @click.option('--filename_targets', default=None, show_default=True,
               help="Absolute filename of trainLabels.csv")
-def main(source_dir, filename_targets):
+@click.option('--extension', default='jpeg', show_default=True,
+              help="Extension of source image files")
+@click.option('--outfile', default='images.npy', show_default=True,
+              help="Numpy memory mapped array for original and augmented "
+                   "images.")
+def main(source_dir, filename_targets, extension, outfile):
     """ Augment data according to Team_o_O
     """
-    AUGMENTATION_PARAMS = {
-        'zoom_range': (1 / 1.15, 1.15),
-        'rotation_range': (0, 360),
-        'shear_range': (0, 0),
-        'translation_range': (-20, 20),
-        'do_flip': True,
-        'allow_stretch': True
+    cnf = {
+        'augmentation_params': {'zoom_range': (1 / 1.15, 1.15),
+                                'rotation_range': (0, 360),
+                                'shear_range': (0, 0),
+                                'translation_range': (-20, 20),
+                                'do_flip': True,
+                                'allow_stretch': True},
+        'sigma': 0.1,
+        'w': 224,
+        'h': 224
     }
 
     print("Augmenting labels...")
     start_time = time.time()
     labels_aug = augment_labels(filename_targets,
                                 filename_targets.split('.')[0] + '_aug.csv')
-    print("Augmentation of labels took", np.round((time.time() -
-                                                   start_time), 3), "sec.")
+    print("Augmentation of labels took",
+          np.round((time.time() - start_time), 3), "sec.")
 
-    # initialize memory mapped numpy array
-    for fn in labels_aug['image']:
+    print("Augmenting images...")
+    start_time = time.time()
+    fp = np.memmap(outfile, dtype=theano.config.floatX, mode='w+',
+                   shape=(len(labels_aug), 3, cnf['h'], cnf['w']))
+
+    for i, fn in enumerate(labels_aug['image']):
         if 'aug' in fn:
-            #TODO: Load image and augment
-            #aug_params = AUGMENTATION_PARAMS
-            #sigma = 0.1
+            fn = os.path.join(source_dir, fn[:fn.find('_aug')]+'.'+extension)
+            img = load_image(fn)
+            fp[i] = augment(img, cnf['w'], cnf['h'],
+                            aug_params=cnf['augmentation_params'],
+                            sigma=cnf['sigma'])
         else:
-            #TODO: Load image and normalize to mean zero and unit variance
-            #aug_params = NO_AUGMENTATION_PARAMS
-            #sigma = 0.0
+            fn = os.path.join(source_dir, fn+'.'+extension)
+            img = load_image(fn)
+            fp[i] = standard_normalize(img)
 
-        #TODO: define all params in one place, e.g. via config file,
-        # including augmentation params, sigma, width and height
-        fn = os.path.join(source_dir, fn)
-        aug_img = load_augment(fn, 224, 224, aug_params=aug_params,
-                               sigma=sigma)
-        # aug_img = aug_img.transpose(2, 1, 0)
-        # consider to refactor prepare_image of KaggleDR class
-
-        #TODO:  write aug_img to memory mapped numpy array
-
-        #TODO: parallelize everything with multiprocessing
-
+    print("Augmentation of images took",
+          np.round((time.time() - start_time), 3), "sec.")
 
 if __name__ == '__main__':
     main()
