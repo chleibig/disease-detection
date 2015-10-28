@@ -160,8 +160,43 @@ def augment_color(img, sigma=0.1, color_vec=None):
     noise = np.dot(U, alpha.T)
     return img + noise[:, np.newaxis, np.newaxis]
 
+def load_image(filename):
+    """Load image
 
-def load_augment(fname, w, h, aug_params=NO_AUGMENTATION_PARAMS,
+    Parameters
+    ----------
+    filename : string
+
+    Returns
+    -------
+    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+                                                           theano.config.floatX
+    """
+    return np.array(Image.open(filename), dtype=theano.config.floatX)\
+            .transpose(2, 1, 0)
+
+def standard_normalize(image):
+    """Normalize image to have zero mean and unit variance.
+
+    Subtracts channel MEAN and divides by channel STD
+
+    Parameters
+    ----------
+    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+                                                           theano.config.floatX
+
+    Returns
+    -------
+    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+                                                           theano.config.floatX
+    """
+
+    image = np.subtract(image, MEAN[:, np.newaxis, np.newaxis])
+    image = np.divide(image, STD[:, np.newaxis, np.newaxis])
+    return image
+
+
+def load_augment(filename, w, h, aug_params=NO_AUGMENTATION_PARAMS,
                  transform=None, sigma=0.0, color_vec=None):
     """Load augmented image with output shape (w, h).
 
@@ -170,15 +205,16 @@ def load_augment(fname, w, h, aug_params=NO_AUGMENTATION_PARAMS,
     (color_vec).
     To generate a random augmentation specify aug_params and sigma.
     """
-    img = np.array(Image.open(fname), dtype=theano.config.floatX)\
-        .transpose(2, 1, 0)
+
+    img = load_image(filename)
+
     if transform is None:
         img = perturb(img, augmentation_params=aug_params, target_shape=(w, h))
     else:
         img = perturb_fixed(img, tform_augment=transform, target_shape=(w, h))
 
-    np.subtract(img, MEAN[:, np.newaxis, np.newaxis], out=img)
-    np.divide(img, STD[:, np.newaxis, np.newaxis], out=img)
+    img = standard_normalize(img)
+
     img = augment_color(img, sigma=sigma, color_vec=color_vec)
     return img
 
