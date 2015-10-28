@@ -1,4 +1,6 @@
-from __future__ import division
+from __future__ import division, print_function
+import os
+import time
 import click
 import numpy as np
 from PIL import Image
@@ -6,7 +8,6 @@ import theano
 import skimage
 import skimage.transform
 from skimage.transform._warps_cy import _warp_fast
-import os
 import pandas as pd
 
 # channel standard deviations
@@ -22,7 +23,7 @@ U = np.array([[-0.56543481, 0.71983482, 0.40240142],
              dtype=theano.config.floatX)
 EV = np.array([1.65513492, 0.48450358, 0.1565086], dtype=theano.config.floatX)
 
-no_augmentation_params = {
+NO_AUGMENTATION_PARAMS = {
     'zoom_range': (1.0, 1.0),
     'rotation_range': (0, 0),
     'shear_range': (0, 0),
@@ -160,7 +161,7 @@ def augment_color(img, sigma=0.1, color_vec=None):
     return img + noise[:, np.newaxis, np.newaxis]
 
 
-def load_augment(fname, w, h, aug_params=no_augmentation_params,
+def load_augment(fname, w, h, aug_params=NO_AUGMENTATION_PARAMS,
                  transform=None, sigma=0.0, color_vec=None):
     """Load augmented image with output shape (w, h).
 
@@ -192,6 +193,10 @@ def augment_labels(filename_labels_org, filename_labels_aug):
     filename_labels_aug : string
         file to save original plus augmented labels to
 
+    Returns
+    -------
+    labels_aug : pandas DataFrame with columns 'image' and 'level'
+
     """
 
     labels_org = pd.read_csv(filename_labels_org, dtype={'level': np.int32})
@@ -220,17 +225,18 @@ def augment_labels(filename_labels_org, filename_labels_aug):
             n_total[k] += n_aug_k
 
     labels_aug.to_csv(filename_labels_aug)
+    return labels_aug
 
 
 @click.command()
-@click.option('--directory',
-              default='/home/vaneeda/Desktop/sample_o_O',
-              show_default=True,
+@click.option('--source_dir', default=None, show_default=True,
               help="Directory with original images.")
-def main(directory):
+@click.option('--filename_targets', default=None, show_default=True,
+              help="Absolute filename of trainLabels.csv")
+def main(source_dir, filename_targets):
     """ Augment data according to Team_o_O
     """
-    aug_params = {
+    AUGMENTATION_PARAMS = {
         'zoom_range': (1 / 1.15, 1.15),
         'rotation_range': (0, 360),
         'shear_range': (0, 0),
@@ -239,12 +245,35 @@ def main(directory):
         'allow_stretch': True
     }
 
-    for fname in os.listdir(directory):
-        fname = os.path.join(directory, fname)
-        aug_img = load_augment(fname, 224, 224, aug_params=aug_params,
-                               sigma=0.1)
+    print("Augmenting labels...")
+    start_time = time.time()
+    labels_aug = augment_labels(filename_targets,
+                                filename_targets.split('.')[0] + '_aug.csv')
+    print("Augmentation of labels took", np.round((time.time() -
+                                                   start_time), 3), "sec.")
+
+    # initialize memory mapped numpy array
+    for fn in labels_aug['image']:
+        if 'aug' in fn:
+            #TODO: Load image and augment
+            #aug_params = AUGMENTATION_PARAMS
+            #sigma = 0.1
+        else:
+            #TODO: Load image and normalize to mean zero and unit variance
+            #aug_params = NO_AUGMENTATION_PARAMS
+            #sigma = 0.0
+
+        #TODO: define all params in one place, e.g. via config file,
+        # including augmentation params, sigma, width and height
+        fn = os.path.join(source_dir, fn)
+        aug_img = load_augment(fn, 224, 224, aug_params=aug_params,
+                               sigma=sigma)
         # aug_img = aug_img.transpose(2, 1, 0)
         # consider to refactor prepare_image of KaggleDR class
+
+        #TODO:  write aug_img to memory mapped numpy array
+
+        #TODO: parallelize everything with multiprocessing
 
 
 if __name__ == '__main__':
