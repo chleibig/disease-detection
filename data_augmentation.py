@@ -1,3 +1,10 @@
+"""This code is largely based on team o_O's data augmentation routines which
+were obtained from
+https://github.com/sveitser/kaggle_diabetic/blob/master/data.py
+which in turn is based on
+https://github.com/benanne/kaggle-ndsb/blob/master/data.py
+
+"""
 from __future__ import division, print_function
 import os
 import time
@@ -300,8 +307,7 @@ def augment_labels(filename_labels_org, filename_labels_aug):
               help="Numpy memory mapped array for original and augmented "
                    "images.")
 def main(source_dir, filename_targets, extension, outfile):
-    """ Augment data according to Team_o_O
-    """
+    """ Augment data according to team_o_O """
     cnf = {
         'augmentation_params': {'zoom_range': (1 / 1.15, 1.15),
                                 'rotation_range': (0, 360),
