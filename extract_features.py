@@ -6,7 +6,7 @@ https://github.com/sveitser/kaggle_diabetic
 Christian Leibig, 2015
 
 """
-from __future__ import division
+from __future__ import division, print_function
 import time
 import click
 import numpy as np
