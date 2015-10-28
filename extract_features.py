@@ -13,11 +13,11 @@ import numpy as np
 
 
 @click.command()
-@click.option('--source_dir', default=None, show_default=True,
-              help="Directory with images to be transformed.")
+@click.option('--source_file', default='images.npy', show_default=True,
+              help="Numpy memmap array with images.")
 @click.option('--filename_targets', default=None, show_default=True,
-              help="Absolute filename of trainLabels.csv")
-@click.option('--batch_size', default=256, show_default=True,
+              help="Absolute filename of labels .csv file")
+@click.option('--batch_size', default=2, show_default=True,
               help="Number of samples to be passed through the network at "
                    "once.")
 @click.option('--outfile', default='feature_activations.npy',
@@ -25,7 +25,7 @@ import numpy as np
               help="Filename for saving the extracted features.")
 @click.option('--last_layer', default='fc7', show_default=True,
               help="Layer up to which features shall be computed.")
-def main(source_dir, filename_targets, batch_size, outfile, last_layer):
+def main(source_file, filename_targets, batch_size, outfile, last_layer):
     """Perform forward pass through network and save extracted features"""
     import theano
     import theano.tensor as T
@@ -42,9 +42,14 @@ def main(source_dir, filename_targets, batch_size, outfile, last_layer):
     feature_activations = lasagne.layers.get_output(output_layer)
     forward_pass = theano.function([input_var], feature_activations)
 
-    kdr = KaggleDR(path_data=source_dir, filename_targets=filename_targets)
+    kdr = KaggleDR(filename_targets=filename_targets)
 
     idx = np.arange(kdr.n_samples)
+    kdr.indices_in_X = idx
+    n_channels, n_rows, n_columns = network['input'].shape[1:]
+    kdr.X = np.memmap(source_file, dtype=theano.config.floatX, mode='r',
+                      shape=(kdr.n_samples, n_channels, n_rows, n_columns))
+
     outputs = np.empty((kdr.n_samples, output_layer.num_units))
     i = 0
     n_batches = np.ceil(kdr.n_samples/batch_size)
@@ -56,6 +61,8 @@ def main(source_dir, filename_targets, batch_size, outfile, last_layer):
             outputs[i*batch_size:min((i+1)*batch_size, kdr.n_samples)] = \
                 forward_pass(inputs)
             i += 1
+
+    del kdr.X  # close memory mapped array
 
     print("Forward pass of", kdr.n_samples, "took",
           np.round((time.time() - start_time), 3), "sec.")
