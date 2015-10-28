@@ -196,17 +196,28 @@ def standard_normalize(image):
     return image
 
 
-def load_augment(filename, w, h, aug_params=NO_AUGMENTATION_PARAMS,
+def augment(img, w, h, aug_params=NO_AUGMENTATION_PARAMS,
                  transform=None, sigma=0.0, color_vec=None):
-    """Load augmented image with output shape (w, h).
+    """Augment image with output shape (w, h).
 
     Default arguments return non augmented image of shape (w, h).
     To apply a fixed transform (color augmentation) specify transform
     (color_vec).
     To generate a random augmentation specify aug_params and sigma.
-    """
 
-    img = load_image(filename)
+    Parameters
+    ----------
+    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+                                                           theano.config.floatX
+        source image
+
+    Returns
+    -------
+    image : numpy array, shape = (n_colors, n_columns, n_rows), dtype =
+                                                           theano.config.floatX
+        transformed image
+
+    """
 
     if transform is None:
         img = perturb(img, augmentation_params=aug_params, target_shape=(w, h))
