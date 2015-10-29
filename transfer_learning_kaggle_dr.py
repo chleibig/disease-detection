@@ -28,6 +28,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     from keras.utils.generic_utils import Progbar
 
     from datasets import KaggleDR
+    from util import quadratic_weighted_kappa
 
     X = T.matrix('X')
     y = T.ivector('y')
@@ -70,6 +71,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     # Scalar loss expression for testing - only necessary if stochasticity such
     # as dropout is involved during training
     test_y_pred = lasagne.layers.get_output(l_out, deterministic=True)
+    y_pred_labels = T.argmax(test_y_pred, axis=1)
     test_loss = lasagne.objectives.categorical_crossentropy(test_y_pred, y)
     test_loss = test_loss.mean()
     # Theano expression for classification accuracy
@@ -80,13 +82,34 @@ def main(path, batch_size, n_epoch, split, model_file):
     train_fn = theano.function([X, y], loss, updates=updates)
 
     # Function to compute val loss and accuracy
-    val_fn = theano.function([X, y], [test_loss, test_acc])
+    val_fn = theano.function([X, y], [test_loss, test_acc, y_pred_labels])
 
     idx_train, idx_val, idx_test = kdr.generate_indices(*split, shuffle=True)
+
+    print('Test accuracy before training:')
+    progbar = Progbar(len(idx_test))
+    for batch in kdr.iterate_minibatches(idx_test, batch_size,
+                                         shuffle=False):
+        inputs, targets = batch
+        err, acc, _ = val_fn(inputs, targets)
+        progbar.add(inputs.shape[0], values=[("test loss", err),
+                                             ("test accuracy", acc)])
+
+    print('Validation accuracy before training:')
+    progbar = Progbar(len(idx_val))
+    for batch in kdr.iterate_minibatches(idx_val, batch_size,
+                                         shuffle=False):
+        inputs, targets = batch
+        err, acc, _ = val_fn(inputs, targets)
+        progbar.add(inputs.shape[0], values=[("validation loss", err),
+                                             ("validation accuracy", acc)])
+
+
 
     ###########################################################################
     # Training
     ###########################################################################
+    start_time = time.time()
     for epoch in range(n_epoch):
         print('-'*40)
         print('Epoch', epoch)
@@ -104,20 +127,27 @@ def main(path, batch_size, n_epoch, split, model_file):
         for batch in kdr.iterate_minibatches(idx_val, batch_size,
                                              shuffle=False):
             inputs, targets = batch
-            err, acc = val_fn(inputs, targets)
+            err, acc, predicted = val_fn(inputs, targets)
+            kp = quadratic_weighted_kappa(targets, predicted, 5)
             progbar.add(inputs.shape[0], values=[("validation loss", err),
-                                                 ("validation accuracy", acc)])
+                                                 ("validation accuracy",
+                                                  acc),
+                                                 ("validation kappa", kp)])
 
+    print("Training took {:.3g} sec.".format(time.time() - start_time))
     ###########################################################################
     # Testing
     ###########################################################################
+    print("Testing...")
     progbar = Progbar(len(idx_test))
     for batch in kdr.iterate_minibatches(idx_test, batch_size,
                                          shuffle=False):
         inputs, targets = batch
-        err, acc = val_fn(inputs, targets)
+        err, acc, predicted = val_fn(inputs, targets)
+        kp = quadratic_weighted_kappa(targets, predicted, 5)
         progbar.add(inputs.shape[0], values=[("test loss", err),
-                                             ("test accuracy", acc)])
+                                             ("test accuracy", acc),
+                                             ("test kappa", kp)])
 
     np.savez(os.path.join(path, model_file),
              *lasagne.layers.get_all_param_values(l_out))
