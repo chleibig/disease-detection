@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import click
 
+
 @click.command()
 @click.option('--path', default=None, show_default=True,
               help="Path to trainLabels.csv and feature_activations.npy.")
@@ -34,10 +35,15 @@ def main(path, batch_size, n_epoch, split, model_file):
     ###########################################################################
     # Load features obtained via forward pass through pretrained network
     ###########################################################################
-    kdr = KaggleDR(path_data=os.path.join(path, 'train'),
-                   filename_targets=os.path.join(path, 'trainLabels.csv'))
+    kdr = KaggleDR(filename_targets=os.path.join(path, 'trainLabels_aug.csv'))
 
-    kdr.X = floatX(np.load(os.path.join(path, 'feature_activations.npy')))
+    # kdr.X = np.memmap(os.path.join(path,
+    #                                'feature_activations_train_aug.npy'),
+    #                   dtype=theano.config.floatX, mode='r',
+    #                   shape=(kdr.n_samples, 3, 224, 224))
+    kdr.X = floatX(np.load(os.path.join(path,
+                                     'feature_activations_train_aug.npy')))
+
     n_samples, n_features = kdr.X.shape
     # assert that we have features for all labels stored in kdr.y
     assert n_samples == kdr.n_samples
@@ -58,7 +64,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     params = lasagne.layers.get_all_params(l_out, trainable=True)
 
     updates = lasagne.updates.nesterov_momentum(loss, params,
-                                                learning_rate=0.01,
+                                                learning_rate=1e-6,
                                                 momentum=0.9)
 
     # Scalar loss expression for testing - only necessary if stochasticity such
@@ -76,7 +82,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     # Function to compute val loss and accuracy
     val_fn = theano.function([X, y], [test_loss, test_acc])
 
-    idx_train, idx_val, idx_test = kdr.generate_indices(*split)
+    idx_train, idx_val, idx_test = kdr.generate_indices(*split, shuffle=True)
 
     ###########################################################################
     # Training
@@ -88,7 +94,8 @@ def main(path, batch_size, n_epoch, split, model_file):
         print("Training...")
 
         progbar = Progbar(len(idx_train))
-        for batch in kdr.iterate_minibatches(idx_train, batch_size):
+        for batch in kdr.iterate_minibatches(idx_train, batch_size,
+                                             shuffle=True):
             inputs, targets = batch
             err = train_fn(inputs, targets)
             progbar.add(inputs.shape[0], values=[("train loss", err)])
