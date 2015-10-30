@@ -185,10 +185,8 @@ class KaggleDR(Dataset):
 
         """
 
-        # Returned image should be (n_channels, n_rows, n_columns)
-        im = np.transpose(im, (2, 0, 1))
-
-        return floatX(im)
+        im = floatX(np.transpose(im, (2, 0, 1)))
+        return KaggleDR.standard_normalize(im)
 
     def load_batch(self, indices):
         """
