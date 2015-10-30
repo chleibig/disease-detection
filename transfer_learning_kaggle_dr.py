@@ -19,6 +19,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     """
 
     import os
+    import time
     import numpy as np
     import theano
     import theano.tensor as T
@@ -65,7 +66,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     params = lasagne.layers.get_all_params(l_out, trainable=True)
 
     updates = lasagne.updates.nesterov_momentum(loss, params,
-                                                learning_rate=1e-6,
+                                                learning_rate=1e-4,
                                                 momentum=0.9)
 
     # Scalar loss expression for testing - only necessary if stochasticity such
