@@ -39,7 +39,9 @@ def main(path, batch_size, n_epoch, split, model_file):
         'labels_train_val': 'trainLabels_aug.csv',
         'features_train_val': 'feature_activations_train_aug.npy',
         'labels_test': 'retinopathy_solution.csv',
-        'features_test': 'feature_activations_test.npy'
+        'features_test': 'feature_activations_test.npy',
+        'priors': np.array([0.73478335,  0.06954962,  0.15065763,  0.02485338,
+                            0.02015601], dtype=theano.config.floatX)
     }
 
     X = T.matrix('X')
@@ -79,11 +81,11 @@ def main(path, batch_size, n_epoch, split, model_file):
     # Scalar loss expression for testing - only necessary if stochasticity such
     # as dropout is involved during training
     test_y_pred = lasagne.layers.get_output(l_out, deterministic=True)
-    y_pred_labels = T.argmax(test_y_pred, axis=1)
+    y_pred_labels = T.argmax(test_y_pred*cnf['priors'], axis=1)
     test_loss = lasagne.objectives.categorical_crossentropy(test_y_pred, y)
     test_loss = test_loss.mean()
     # Theano expression for classification accuracy
-    test_acc = T.mean(T.eq(T.argmax(test_y_pred, axis=1), y),
+    test_acc = T.mean(T.eq(y_pred_labels, y),
                       dtype=theano.config.floatX)
 
     # Function for one training step on minibatch
