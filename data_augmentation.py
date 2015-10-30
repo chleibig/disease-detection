@@ -15,13 +15,8 @@ import theano
 import skimage.transform
 from skimage.transform._warps_cy import _warp_fast
 import pandas as pd
+from datasets import KaggleDR
 
-# channel standard deviations
-STD = np.array([70.53946096, 51.71475228, 43.03428563],
-               dtype=theano.config.floatX)
-# channel means
-MEAN = np.array([108.64628601, 75.86886597, 54.34005737],
-                dtype=theano.config.floatX)
 # for color augmentation, computed with make_pca.py
 U = np.array([[-0.56543481, 0.71983482, 0.40240142],
               [-0.5989477, -0.02304967, -0.80036049],
@@ -183,27 +178,6 @@ def load_image(filename):
         .transpose(2, 0, 1)
 
 
-def standard_normalize(image):
-    """Normalize image to have zero mean and unit variance.
-
-    Subtracts channel MEAN and divides by channel STD
-
-    Parameters
-    ----------
-    image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
-                                                           theano.config.floatX
-
-    Returns
-    -------
-    image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
-                                                           theano.config.floatX
-    """
-
-    image = np.subtract(image, MEAN[:, np.newaxis, np.newaxis])
-    image = np.divide(image, STD[:, np.newaxis, np.newaxis])
-    return image
-
-
 def augment(img, w, h, aug_params=NO_AUGMENTATION_PARAMS,
                  transform=None, sigma=0.0, color_vec=None):
     """Augment image with output shape (w, h).
@@ -245,7 +219,7 @@ def augment(img, w, h, aug_params=NO_AUGMENTATION_PARAMS,
 
     img = img.transpose(0, 2, 1)
 
-    img = standard_normalize(img)
+    img = KaggleDR.standard_normalize(img)
 
     img = augment_color(img, sigma=sigma, color_vec=color_vec)
     return img
@@ -342,7 +316,7 @@ def main(source_dir, filename_targets, extension, outfile):
         else:
             fn = os.path.join(source_dir, fn+'.'+extension)
             img = load_image(fn)
-            fp[i] = standard_normalize(img)
+            fp[i] = KaggleDR.standard_normalize(img)
 
     print("Augmentation of images took",
           np.round((time.time() - start_time), 3), "sec.")

@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 from lasagne.utils import floatX
+import theano
 
 
 class Dataset(object):
@@ -103,6 +104,13 @@ class KaggleDR(Dataset):
 
     """
 
+    # channel standard deviations (calculated by team o_O)
+    STD = np.array([70.53946096, 51.71475228, 43.03428563],
+                   dtype=theano.config.floatX)
+    # channel means (calculated by team o_O)
+    MEAN = np.array([108.64628601, 75.86886597, 54.34005737],
+                    dtype=theano.config.floatX)
+
     def __init__(self, path_data=None, filename_targets=None):
         self.path_data = path_data
         self.filename_targets = filename_targets
@@ -139,6 +147,27 @@ class KaggleDR(Dataset):
 
         filename = os.path.join(self.path_data, filename + '.jpeg')
         return np.array(Image.open(filename))
+
+    @staticmethod
+    def standard_normalize(image):
+        """Normalize image to have zero mean and unit variance.
+
+        Subtracts channel MEAN and divides by channel STD
+
+        Parameters
+        ----------
+        image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
+                                                           theano.config.floatX
+
+        Returns
+        -------
+        image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
+                                                           theano.config.floatX
+        """
+
+        image = np.subtract(image, KaggleDR.MEAN[:, np.newaxis, np.newaxis])
+        image = np.divide(image, KaggleDR.STD[:, np.newaxis, np.newaxis])
+        return image
 
     @staticmethod
     def prepare_image(im):
