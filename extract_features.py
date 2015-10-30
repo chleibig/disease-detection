@@ -13,8 +13,11 @@ import numpy as np
 
 
 @click.command()
-@click.option('--source_file', default='images.npy', show_default=True,
-              help="Numpy memmap array with images.")
+@click.option('--source', help="Either a *.npy array (assumed to have "
+                               "standard normal colour channels) or a "
+                               "directory with "
+                               "images (standard normalization of colour "
+                               "channels is applied).")
 @click.option('--filename_targets', default=None, show_default=True,
               help="Absolute filename of labels .csv file")
 @click.option('--batch_size', default=2, show_default=True,
@@ -25,7 +28,7 @@ import numpy as np
               help="Filename for saving the extracted features.")
 @click.option('--last_layer', default='fc7', show_default=True,
               help="Layer up to which features shall be computed.")
-def main(source_file, filename_targets, batch_size, outfile, last_layer):
+def main(source, filename_targets, batch_size, outfile, last_layer):
     """Perform forward pass through network and save extracted features"""
     import theano
     import theano.tensor as T
@@ -42,13 +45,19 @@ def main(source_file, filename_targets, batch_size, outfile, last_layer):
     feature_activations = lasagne.layers.get_output(output_layer)
     forward_pass = theano.function([input_var], feature_activations)
 
-    kdr = KaggleDR(filename_targets=filename_targets)
-
-    idx = np.arange(kdr.n_samples)
-    kdr.indices_in_X = idx
-    n_channels, n_rows, n_columns = network['input'].shape[1:]
-    kdr.X = np.memmap(source_file, dtype=theano.config.floatX, mode='r',
-                      shape=(kdr.n_samples, n_channels, n_rows, n_columns))
+    if source.endswith('.npy'):
+        kdr = KaggleDR(filename_targets=filename_targets)
+        idx = np.arange(kdr.n_samples)
+        # Assign member variable of kdr with indices and data
+        kdr.indices_in_X = idx
+        n_channels, n_rows, n_columns = network['input'].shape[1:]
+        kdr.X = np.memmap(source, dtype=theano.config.floatX, mode='r',
+                          shape=(kdr.n_samples, n_channels, n_rows, n_columns))
+    else:
+        kdr = KaggleDR(path_data=source, filename_targets=filename_targets)
+        idx = np.arange(kdr.n_samples)
+        # No assignment of kdr.X and kdr.indices_in_X results in loading images
+        # from disk
 
     outputs = np.empty((kdr.n_samples, output_layer.num_units))
     i = 0
@@ -62,7 +71,8 @@ def main(source_file, filename_targets, batch_size, outfile, last_layer):
                 forward_pass(inputs)
             i += 1
 
-    del kdr.X  # close memory mapped array
+    if source.endswith('.npy'):
+        del kdr.X  # close memory mapped array
 
     print("Forward pass of", kdr.n_samples, "took",
           np.round((time.time() - start_time), 3), "sec.")
