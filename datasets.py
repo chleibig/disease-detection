@@ -174,10 +174,6 @@ class KaggleDR(Dataset):
         """
         Prepare image.
 
-        Dimensions get reordered according to theano/lasagne conventions
-        Colour channels are inverted: RGB -> BGR
-        cast to floatX
-
         Parameters
         ----------
         im : numpy array, shape = (n_rows, n_columns, n_channels)
@@ -191,8 +187,7 @@ class KaggleDR(Dataset):
 
         # Returned image should be (n_channels, n_rows, n_columns)
         im = np.transpose(im, (2, 0, 1))
-        # Convert to BGR
-        im = im[::-1, :, :]
+
         return floatX(im)
 
     def load_batch(self, indices):
