@@ -165,9 +165,9 @@ class KaggleDR(Dataset):
                                                            theano.config.floatX
         """
 
-        image = np.subtract(image, KaggleDR.MEAN[:, np.newaxis, np.newaxis])
-        image = np.divide(image, KaggleDR.STD[:, np.newaxis, np.newaxis])
-        return image
+        return np.divide(np.subtract(image,
+                                     KaggleDR.MEAN[:, np.newaxis, np.newaxis]),
+                         KaggleDR.STD[:, np.newaxis, np.newaxis])
 
     @staticmethod
     def prepare_image(im):
