@@ -9,7 +9,7 @@ import click
 @click.option('--batch_size', default=2, show_default=True)
 @click.option('--n_epoch', default=100, show_default=True,
               help="Number of epochs for training and validation.")
-@click.option('--split', nargs=3, type=float, default=(0.8, 0.1, 0.1),
+@click.option('--split', nargs=3, type=float, default=(0.9, 0.1, 0.0),
               help="Fraction of samples to be used for train, val and test "
                    "respectively.")
 @click.option('--model_file', default='model.npz', show_default=True,
@@ -31,20 +31,27 @@ def main(path, batch_size, n_epoch, split, model_file):
     from datasets import KaggleDR
     from util import quadratic_weighted_kappa
 
+    ###########################################################################
+    # Parameters - once the API for this code is clear, move these to a config
+    # file
+    ###########################################################################
+    cnf = {
+        'labels_train_val': 'trainLabels_aug.csv',
+        'features_train_val': 'feature_activations_train_aug.npy',
+        'labels_test': 'retinopathy_solution.csv',
+        'features_test': 'feature_activations_test.npy'
+    }
+
     X = T.matrix('X')
     y = T.ivector('y')
 
     ###########################################################################
     # Load features obtained via forward pass through pretrained network
     ###########################################################################
-    kdr = KaggleDR(filename_targets=os.path.join(path, 'trainLabels_aug.csv'))
-
-    # kdr.X = np.memmap(os.path.join(path,
-    #                                'feature_activations_train_aug.npy'),
-    #                   dtype=theano.config.floatX, mode='r',
-    #                   shape=(kdr.n_samples, 3, 224, 224))
+    kdr = KaggleDR(filename_targets=os.path.join(path,
+                                                 cnf['labels_train_val']))
     kdr.X = floatX(np.load(os.path.join(path,
-                                     'feature_activations_train_aug.npy')))
+                                        cnf['features_train_val'])))
 
     n_samples, n_features = kdr.X.shape
     # assert that we have features for all labels stored in kdr.y
@@ -85,16 +92,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     # Function to compute val loss and accuracy
     val_fn = theano.function([X, y], [test_loss, test_acc, y_pred_labels])
 
-    idx_train, idx_val, idx_test = kdr.generate_indices(*split, shuffle=True)
-
-    print('Test accuracy before training:')
-    progbar = Progbar(len(idx_test))
-    for batch in kdr.iterate_minibatches(idx_test, batch_size,
-                                         shuffle=False):
-        inputs, targets = batch
-        err, acc, _ = val_fn(inputs, targets)
-        progbar.add(inputs.shape[0], values=[("test loss", err),
-                                             ("test accuracy", acc)])
+    idx_train, idx_val, _ = kdr.generate_indices(*split, shuffle=True)
 
     print('Validation accuracy before training:')
     progbar = Progbar(len(idx_val))
@@ -136,12 +134,25 @@ def main(path, batch_size, n_epoch, split, model_file):
                                                  ("validation kappa", kp)])
 
     print("Training took {:.3g} sec.".format(time.time() - start_time))
+
+    del kdr
+
     ###########################################################################
     # Testing
     ###########################################################################
     print("Testing...")
-    progbar = Progbar(len(idx_test))
-    for batch in kdr.iterate_minibatches(idx_test, batch_size,
+    kdr = KaggleDR(filename_targets=os.path.join(path,
+                                                 cnf['labels_test']))
+    kdr.X = floatX(np.load(os.path.join(path,
+                                        cnf['features_test'])))
+
+    n_samples = kdr.X.shape[0]
+    # assert that we have features for all labels stored in kdr.y
+    assert n_samples == kdr.n_samples
+    kdr.indices_in_X = np.arange(n_samples)
+
+    progbar = Progbar(kdr.n_samples)
+    for batch in kdr.iterate_minibatches(kdr.indices_in_X, batch_size,
                                          shuffle=False):
         inputs, targets = batch
         err, acc, predicted = val_fn(inputs, targets)
