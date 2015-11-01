@@ -40,8 +40,11 @@ def main(path, batch_size, n_epoch, split, model_file):
         'features_train_val': 'feature_activations_train_aug.npy',
         'labels_test': 'retinopathy_solution.csv',
         'features_test': 'feature_activations_test.npy',
-        'priors': np.array([0.73478335,  0.06954962,  0.15065763,  0.02485338,
-                            0.02015601], dtype=theano.config.floatX)
+        'val_priors': np.array(5*[1/5.], dtype=theano.config.floatX),
+        'test_priors': np.array(5*[1/5.], dtype=theano.config.floatX)
+        # 'test_priors': np.array([0.73478335,  0.06954962,  0.15065763,
+        #                          0.02485338,  0.02015601],
+        #                         dtype=theano.config.floatX)
     }
 
     X = T.matrix('X')
@@ -68,8 +71,8 @@ def main(path, batch_size, n_epoch, split, model_file):
     l_out = NonlinearityLayer(l_hidden, lasagne.nonlinearities.softmax)
 
     # Scalar loss expression to be minimized during training:
-    y_pred = lasagne.layers.get_output(l_out)
-    loss = lasagne.objectives.categorical_crossentropy(y_pred, y)
+    train_posteriors = lasagne.layers.get_output(l_out)
+    loss = lasagne.objectives.categorical_crossentropy(train_posteriors, y)
     loss = loss.mean()
 
     params = lasagne.layers.get_all_params(l_out, trainable=True)
@@ -78,21 +81,35 @@ def main(path, batch_size, n_epoch, split, model_file):
                                                 learning_rate=1e-4,
                                                 momentum=0.9)
 
+    val_posteriors = lasagne.layers.get_output(l_out)
+    val_posteriors_bal = val_posteriors * cnf['val_priors'] / \
+        T.sum(val_posteriors * cnf['val_priors'], axis=1).dimshuffle(0, 'x')
+    val_labels = T.argmax(val_posteriors_bal, axis=1)
+    val_loss = lasagne.objectives.categorical_crossentropy(val_posteriors_bal,
+                                                           y)
+    val_loss = val_loss.mean()
+    val_acc = T.mean(T.eq(val_labels, y), dtype=theano.config.floatX)
+
     # Scalar loss expression for testing - only necessary if stochasticity such
     # as dropout is involved during training
-    test_y_pred = lasagne.layers.get_output(l_out, deterministic=True)
-    y_pred_labels = T.argmax(test_y_pred*cnf['priors'], axis=1)
-    test_loss = lasagne.objectives.categorical_crossentropy(test_y_pred, y)
+    test_posteriors = lasagne.layers.get_output(l_out, deterministic=True)
+    test_posteriors_bal = test_posteriors * cnf['test_priors'] / \
+        T.sum(test_posteriors * cnf['test_priors'], axis=1).dimshuffle(0, 'x')
+    test_labels = T.argmax(test_posteriors_bal, axis=1)
+    test_loss = lasagne.objectives.categorical_crossentropy(
+        test_posteriors_bal, y)
     test_loss = test_loss.mean()
     # Theano expression for classification accuracy
-    test_acc = T.mean(T.eq(y_pred_labels, y),
+    test_acc = T.mean(T.eq(test_labels, y),
                       dtype=theano.config.floatX)
 
     # Function for one training step on minibatch
     train_fn = theano.function([X, y], loss, updates=updates)
 
+    val_fn = theano.function([X, y], [val_loss, val_acc, val_labels])
+
     # Function to compute val loss and accuracy
-    val_fn = theano.function([X, y], [test_loss, test_acc, y_pred_labels])
+    test_fn = theano.function([X, y], [test_loss, test_acc, test_labels])
 
     idx_train, idx_val, _ = kdr.generate_indices(*split, shuffle=True)
 
@@ -101,8 +118,8 @@ def main(path, batch_size, n_epoch, split, model_file):
     for batch in kdr.iterate_minibatches(idx_val, batch_size,
                                          shuffle=False):
         inputs, targets = batch
-        err, acc, _ = val_fn(inputs, targets)
-        progbar.add(inputs.shape[0], values=[("validation loss", err),
+        loss, acc, _ = val_fn(inputs, targets)
+        progbar.add(inputs.shape[0], values=[("validation loss", loss),
                                              ("validation accuracy", acc)])
 
 
@@ -121,16 +138,16 @@ def main(path, batch_size, n_epoch, split, model_file):
         for batch in kdr.iterate_minibatches(idx_train, batch_size,
                                              shuffle=True):
             inputs, targets = batch
-            err = train_fn(inputs, targets)
-            progbar.add(inputs.shape[0], values=[("train loss", err)])
+            loss = train_fn(inputs, targets)
+            progbar.add(inputs.shape[0], values=[("train loss", loss)])
 
         progbar = Progbar(len(idx_val))
         for batch in kdr.iterate_minibatches(idx_val, batch_size,
                                              shuffle=False):
             inputs, targets = batch
-            err, acc, predicted = val_fn(inputs, targets)
-            kp = quadratic_weighted_kappa(targets, predicted, 5)
-            progbar.add(inputs.shape[0], values=[("validation loss", err),
+            loss, acc, labels = val_fn(inputs, targets)
+            kp = quadratic_weighted_kappa(targets, labels, 5)
+            progbar.add(inputs.shape[0], values=[("validation loss", loss),
                                                  ("validation accuracy",
                                                   acc),
                                                  ("validation kappa", kp)])
@@ -157,9 +174,9 @@ def main(path, batch_size, n_epoch, split, model_file):
     for batch in kdr.iterate_minibatches(kdr.indices_in_X, batch_size,
                                          shuffle=False):
         inputs, targets = batch
-        err, acc, predicted = val_fn(inputs, targets)
-        kp = quadratic_weighted_kappa(targets, predicted, 5)
-        progbar.add(inputs.shape[0], values=[("test loss", err),
+        loss, acc, labels = test_fn(inputs, targets)
+        kp = quadratic_weighted_kappa(targets, labels, 5)
+        progbar.add(inputs.shape[0], values=[("test loss", loss),
                                              ("test accuracy", acc),
                                              ("test kappa", kp)])
 
