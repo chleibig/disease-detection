@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 import bokeh.plotting as bp
-import bokeh.palettes
+import seaborn as sns
 
 
 def quadratic_weighted_kappa(labels_rater_1, labels_rater_2, num_classes):
@@ -71,17 +71,11 @@ class Progplot(object):
     def save(self):
         """Add one line for each tracked quantity"""
         x = np.arange(self.n_x)
-
         n_lines = len(self.y.keys())
-        if n_lines < 3:
-            n_lines = 3
-        if n_lines > 9:
-            n_lines = 9
-
-        colors = getattr(bokeh.palettes, "GnBu" + str(n_lines))
+        colors = sns.color_palette(n_colors=n_lines).as_hex()
         for i, k in enumerate(sorted(self.y.keys())):
-            self.p.line(x, self.y[k], line_color=colors[i % n_lines],
-                        legend=k, line_width=2)
+            self.p.line(x, self.y[k], line_color=colors[i], legend=k,
+                        line_width=2)
 
         bp.save(self.p, self.output_file)
 
