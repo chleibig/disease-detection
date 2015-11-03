@@ -1,6 +1,7 @@
-from __future__ import print_function
+from __future__ import print_function, division
 
 import click
+from util import Progplot
 
 
 @click.command()
@@ -53,6 +54,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     ###########################################################################
     # Load features obtained via forward pass through pretrained network
     ###########################################################################
+
     kdr = KaggleDR(filename_targets=os.path.join(path,
                                                  cnf['labels_train_val']))
     kdr.X = floatX(np.load(os.path.join(path,
@@ -62,6 +64,16 @@ def main(path, batch_size, n_epoch, split, model_file):
     # assert that we have features for all labels stored in kdr.y
     assert n_samples == kdr.n_samples
     kdr.indices_in_X = np.arange(n_samples)
+    del n_samples
+
+    kdr_test = KaggleDR(filename_targets=os.path.join(path,
+                                                      cnf['labels_test']))
+    kdr_test.X = floatX(np.load(os.path.join(path,
+                                        cnf['features_test'])))
+    n_samples = kdr_test.X.shape[0]
+    # assert that we have features for all labels stored in kdr_test.y
+    assert n_samples == kdr_test.n_samples
+    kdr_test.indices_in_X = np.arange(n_samples)
 
     ###########################################################################
     # Transfer Learning: Train logistic regression on extracted features
@@ -119,67 +131,87 @@ def main(path, batch_size, n_epoch, split, model_file):
                                          shuffle=False):
         inputs, targets = batch
         loss, acc, _ = val_fn(inputs, targets)
-        progbar.add(inputs.shape[0], values=[("validation loss", loss),
-                                             ("validation accuracy", acc)])
+        progbar.add(inputs.shape[0], values=[("val. loss", loss),
+                                             ("val. accuracy", acc)])
 
-
+    ###########################################################################
+    # Setup progression plot
+    ###########################################################################
+    progplot = Progplot(n_epoch,
+                        "epochs (batch_size "+str(batch_size)+")")
+    ###########################################################################
 
     ###########################################################################
     # Training
     ###########################################################################
     start_time = time.time()
+    train_loss = np.zeros(len(idx_train))
+    test_loss = np.zeros(kdr_test.n_samples)
+    test_acc = np.zeros(kdr_test.n_samples)
+    test_kp = np.zeros(kdr_test.n_samples)
+
     for epoch in range(n_epoch):
         print('-'*40)
         print('Epoch', epoch)
         print('-'*40)
         print("Training...")
 
+        current = 0
+        train_loss[:] = 0
         progbar = Progbar(len(idx_train))
         for batch in kdr.iterate_minibatches(idx_train, batch_size,
                                              shuffle=True):
             inputs, targets = batch
             loss = train_fn(inputs, targets)
             progbar.add(inputs.shape[0], values=[("train loss", loss)])
+            train_loss[current:current+inputs.shape[0]] = \
+                [loss]*inputs.shape[0]
+            current += inputs.shape[0]
 
-        progbar = Progbar(len(idx_val))
-        for batch in kdr.iterate_minibatches(idx_val, batch_size,
-                                             shuffle=False):
+        # progbar = Progbar(len(idx_val))
+        # for batch in kdr.iterate_minibatches(idx_val, batch_size,
+        #                                      shuffle=False):
+        #     inputs, targets = batch
+        #     loss, acc, labels = val_fn(inputs, targets)
+        #     kp = quadratic_weighted_kappa(targets, labels, 5)
+        #     progbar.add(inputs.shape[0], values=[("val. loss", loss),
+        #                                          ("val. accuracy",
+        #                                           acc),
+        #                                          ("val. kappa", kp)])
+        #     progplot.add(values=[("val. loss", loss),
+        #                          ("val. accuracy", acc),
+        #                          ("val. kappa", kp)])
+
+        print("Testing...")
+        current = 0
+        test_loss[:] = 0
+        test_acc[:] = 0
+        test_kp[:] = 0
+        progbar = Progbar(kdr_test.n_samples)
+        for batch in kdr_test.iterate_minibatches(kdr_test.indices_in_X,
+                                                  batch_size, shuffle=False):
             inputs, targets = batch
-            loss, acc, labels = val_fn(inputs, targets)
+            loss, acc, labels = test_fn(inputs, targets)
             kp = quadratic_weighted_kappa(targets, labels, 5)
-            progbar.add(inputs.shape[0], values=[("validation loss", loss),
-                                                 ("validation accuracy",
-                                                  acc),
-                                                 ("validation kappa", kp)])
+            progbar.add(inputs.shape[0], values=[("test loss", loss),
+                                                 ("test accuracy", acc),
+                                                 ("test kappa", kp)])
+            test_loss[current:current+inputs.shape[0]] = \
+                [loss]*inputs.shape[0]
+            test_acc[current:current+inputs.shape[0]] = \
+                [acc]*inputs.shape[0]
+            test_kp[current:current+inputs.shape[0]] = \
+                [kp]*inputs.shape[0]
+            current += inputs.shape[0]
 
-    print("Training took {:.3g} sec.".format(time.time() - start_time))
+        progplot.add(values=[("train loss", np.mean(train_loss)),
+                             ("test loss", np.mean(test_loss)),
+                             ("test accuracy", np.mean(test_acc)),
+                             ("test kappa", np.mean(test_kp))])
 
-    del kdr
+        print("Training took {:.3g} sec.".format(time.time() - start_time))
 
-    ###########################################################################
-    # Testing
-    ###########################################################################
-    print("Testing...")
-    kdr = KaggleDR(filename_targets=os.path.join(path,
-                                                 cnf['labels_test']))
-    kdr.X = floatX(np.load(os.path.join(path,
-                                        cnf['features_test'])))
-
-    n_samples = kdr.X.shape[0]
-    # assert that we have features for all labels stored in kdr.y
-    assert n_samples == kdr.n_samples
-    kdr.indices_in_X = np.arange(n_samples)
-
-    progbar = Progbar(kdr.n_samples)
-    for batch in kdr.iterate_minibatches(kdr.indices_in_X, batch_size,
-                                         shuffle=False):
-        inputs, targets = batch
-        loss, acc, labels = test_fn(inputs, targets)
-        kp = quadratic_weighted_kappa(targets, labels, 5)
-        progbar.add(inputs.shape[0], values=[("test loss", loss),
-                                             ("test accuracy", acc),
-                                             ("test kappa", kp)])
-
+    progplot.save()
     np.savez(os.path.join(path, model_file),
              *lasagne.layers.get_all_param_values(l_out))
 
