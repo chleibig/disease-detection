@@ -34,10 +34,10 @@ def main(source, filename_targets, batch_size, outfile, last_layer):
     import theano.tensor as T
     import lasagne
 
-    from modelzoo import vgg19
+    from modelzoo import models
     from datasets import KaggleDR
 
-    network = vgg19.build_model(load_weights=True)
+    network = models.vgg19(load_weights=True)
     output_layer = network[last_layer]
     input_var = T.tensor4('inputs')
     network['input'].input_var = input_var
