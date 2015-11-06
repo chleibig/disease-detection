@@ -38,10 +38,10 @@ def main(source, filename_targets, batch_size, outfile, last_layer):
     import models
     from datasets import KaggleDR
 
-    network = models.vgg19(load_weights=True)
-    output_layer = network[last_layer]
     input_var = T.tensor4('inputs')
-    network['input'].input_var = input_var
+    network = models.vgg19(batch_size=batch_size, input_var=input_var,
+                           filename='vgg19.pkl')
+    output_layer = network[last_layer]
 
     feature_activations = lasagne.layers.get_output(output_layer)
     forward_pass = theano.function([input_var], feature_activations)

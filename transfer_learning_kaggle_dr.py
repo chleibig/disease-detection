@@ -25,10 +25,10 @@ def main(path, batch_size, n_epoch, split, model_file):
     import theano
     import theano.tensor as T
     import lasagne
-    from lasagne.layers import InputLayer, DenseLayer, NonlinearityLayer
     from lasagne.utils import floatX
     from keras.utils.generic_utils import Progbar
 
+    import models
     from datasets import KaggleDR
     from util import quadratic_weighted_kappa
 
@@ -68,8 +68,7 @@ def main(path, batch_size, n_epoch, split, model_file):
 
     kdr_test = KaggleDR(filename_targets=os.path.join(path,
                                                       cnf['labels_test']))
-    kdr_test.X = floatX(np.load(os.path.join(path,
-                                        cnf['features_test'])))
+    kdr_test.X = floatX(np.load(os.path.join(path, cnf['features_test'])))
     n_samples = kdr_test.X.shape[0]
     # assert that we have features for all labels stored in kdr_test.y
     assert n_samples == kdr_test.n_samples
@@ -78,9 +77,9 @@ def main(path, batch_size, n_epoch, split, model_file):
     ###########################################################################
     # Transfer Learning: Train logistic regression on extracted features
     ###########################################################################
-    l_in = InputLayer((batch_size, n_features), input_var=X)
-    l_hidden = DenseLayer(l_in, num_units=5, nonlinearity=None)
-    l_out = NonlinearityLayer(l_hidden, lasagne.nonlinearities.softmax)
+    network = models.vgg19_fc8_to_prob(batch_size=batch_size,
+                                       input_var=X, n_classes=5)
+    l_out = network['prob']
 
     # Scalar loss expression to be minimized during training:
     train_posteriors = lasagne.layers.get_output(l_out)
