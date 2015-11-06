@@ -1,5 +1,6 @@
 import warnings
-
+import pickle
+import numpy as np
 from lasagne.layers import InputLayer, DenseLayer, NonlinearityLayer
 from lasagne.layers import set_all_param_values
 try:
@@ -11,15 +12,19 @@ from lasagne.layers import Pool2DLayer as PoolLayer
 from lasagne.nonlinearities import softmax
 
 
-def vgg19(load_weights=True, filename='vgg19.pkl'):
+def vgg19(batch_size=None, input_var=None, filename=None):
     """Setup network structure for VGG19 and optionally load pretrained
     weights
 
     Parameters
     ----------
-    load_weights : Optional[bool]
-        set network weights to those loaded from filename
+    batch_size : optional[int]
+        if None, not known at compile time
+    input_var : Theano symbolic variable or `None` (default: `None`)
+        A variable representing a network input. If it is not provided, a
+        variable will be created.
     filename : Optional[str]
+        if filename is not None, weights are loaded from filename
 
     Returns
     -------
@@ -37,8 +42,9 @@ def vgg19(load_weights=True, filename='vgg19.pkl'):
         https://s3.amazonaws.com/lasagne/recipes/pretrained/imagenet/vgg19.pkl
 
     """
+
     net = {}
-    net['input'] = InputLayer((None, 3, 224, 224))
+    net['input'] = InputLayer((batch_size, 3, 224, 224), input_var=input_var)
     net['conv1_1'] = ConvLayer(net['input'], 64, 3, pad=1)
     net['conv1_2'] = ConvLayer(net['conv1_1'], 64, 3, pad=1)
     net['pool1'] = PoolLayer(net['conv1_2'], 2)
@@ -65,11 +71,112 @@ def vgg19(load_weights=True, filename='vgg19.pkl'):
     net['fc8'] = DenseLayer(net['fc7'], num_units=1000, nonlinearity=None)
     net['prob'] = NonlinearityLayer(net['fc8'], softmax)
 
-    if load_weights:
-        import pickle
-        with open(filename) as handle:
-            model = pickle.load(handle)
-        set_all_param_values(net['prob'], model['param values'])
+    if filename is not None:
+        load_weights(net['prob'], filename)
 
     return net
 
+
+def vgg19_fc7_to_prob(batch_size=None, input_var=None, filename=None,
+                      n_classes=5):
+    """Setup network structure for VGG19 layers fc7 and softmax output
+
+       Input is supposed to be feature activations of fc6 layer from VGG19
+
+    Parameters
+    ----------
+    batch_size : optional[int]
+        if None, not known at compile time
+    input_var : Theano symbolic variable or `None` (default: `None`)
+        A variable representing a network input. If it is not provided, a
+        variable will be created.
+    filename : Optional[str]
+        if filename is not None, weights are loaded from filename
+    n_classes : Optional[int]
+        default 5 for transfer learning on Kaggle DR data
+
+    Returns
+    -------
+    dict
+        one lasagne layer per key
+
+    """
+
+    net = {}
+    net['input'] = InputLayer((batch_size, 4096), input_var=input_var)
+    net['fc7'] = DenseLayer(net['input'], num_units=4096)
+    net['fc8'] = DenseLayer(net['fc7'], num_units=n_classes, nonlinearity=None)
+    net['prob'] = NonlinearityLayer(net['fc8'], softmax)
+
+    if filename is not None:
+        load_weights(net['prob'], filename)
+
+    return net
+
+
+def vgg19_fc8_to_prob(batch_size=None, input_var=None, filename=None,
+                      n_classes=5):
+    """Setup network structure for retraining last layer of VGG19
+
+       Input is supposed to be feature activations of fc7 layer from VGG19
+       The network architecture is equivalent to logistic regression
+
+    Parameters
+    ----------
+    batch_size : optional[int]
+        if None, not known at compile time
+    input_var : Theano symbolic variable or `None` (default: `None`)
+        A variable representing a network input. If it is not provided, a
+        variable will be created.
+    filename : Optional[str]
+        if filename is not None, weights are loaded from filename
+    n_classes : Optional[int]
+        default 5 for transfer learning on Kaggle DR data
+
+    Returns
+    -------
+    dict
+        one lasagne layer per key
+
+    """
+
+    net = {}
+    net['input'] = InputLayer((batch_size, 4096), input_var=input_var)
+    net['fc8'] = DenseLayer(net['input'], num_units=n_classes,
+                            nonlinearity=None)
+    net['prob'] = NonlinearityLayer(net['fc8'], softmax)
+
+    if filename is not None:
+        load_weights(net['prob'], filename)
+
+    return net
+
+
+def load_weights(layer, filename):
+    """
+    Load network weights from either a pickle or a numpy file and set
+    the parameters of all layers below layer (including the layer itself)
+    to the given values.
+
+    Parameters
+    ----------
+    layer : Layer
+        The :class:`Layer` instance for which to set all parameter values
+    filename : str with ending .pkl or .npz
+
+    """
+
+    if filename.endswith('.npz'):
+        with np.load('model.npz') as f:
+            param_values = [f['arr_%d' % i] for i in range(len(f.files))]
+        set_all_param_values(layer, param_values)
+        return
+
+    if filename.endswith('.pkl'):
+        with open(filename) as handle:
+            model = pickle.load(handle)
+        set_all_param_values(layer, model['param values'])
+        return
+
+    raise NotImplementedError('Format of {filename} not known'.format(
+        filename=filename))
