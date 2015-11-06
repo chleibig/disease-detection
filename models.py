@@ -1,13 +1,3 @@
-# VGG-19, 19-layer model from the paper:
-# "Very Deep Convolutional Networks for Large-Scale Image Recognition"
-# Original source: https://gist.github.com/ksimonyan/3785162f95cd2d5fee77
-# License: non-commercial use only
-
-# edited by cleibig, 2015-09-29
-
-# Download pretrained weights from:
-# https://s3.amazonaws.com/lasagne/recipes/pretrained/imagenet/vgg19.pkl
-
 import warnings
 
 from lasagne.layers import InputLayer, DenseLayer, NonlinearityLayer
@@ -21,7 +11,32 @@ from lasagne.layers import Pool2DLayer as PoolLayer
 from lasagne.nonlinearities import softmax
 
 
-def build_model(load_weights=True, filename='vgg19.pkl'):
+def vgg19(load_weights=True, filename='vgg19.pkl'):
+    """Setup network structure for VGG19 and optionally load pretrained
+    weights
+
+    Parameters
+    ----------
+    load_weights : Optional[bool]
+        set network weights to those loaded from filename
+    filename : Optional[str]
+
+    Returns
+    -------
+    dict
+        one lasagne layer per key
+
+    Notes
+    -----
+        Reference: Simonyan & Zisserman, 2015: "Very Deep Convolutional
+        Networks for Large-Scale Image Recognition"
+        This function is based on:
+            https://gist.github.com/ksimonyan/3785162f95cd2d5fee77
+        License: non-commercial use only
+        Download pretrained weights from:
+        https://s3.amazonaws.com/lasagne/recipes/pretrained/imagenet/vgg19.pkl
+
+    """
     net = {}
     net['input'] = InputLayer((None, 3, 224, 224))
     net['conv1_1'] = ConvLayer(net['input'], 64, 3, pad=1)

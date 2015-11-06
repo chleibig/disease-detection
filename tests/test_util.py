@@ -1,8 +1,5 @@
 import unittest
 from numpy.random import randint
-import sys
-import os
-sys.path.append(os.getcwd())
 from util import quadratic_weighted_kappa
 from ref_quadratic_weighted_kappa import quadratic_weighted_kappa as ref_quadratic_weighted_kappa
 from numpy.testing import assert_almost_equal

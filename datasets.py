@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 from lasagne.utils import floatX
+import theano
 
 
 class Dataset(object):
@@ -103,6 +104,13 @@ class KaggleDR(Dataset):
 
     """
 
+    # channel standard deviations (calculated by team o_O)
+    STD = np.array([70.53946096, 51.71475228, 43.03428563],
+                   dtype=theano.config.floatX)
+    # channel means (calculated by team o_O)
+    MEAN = np.array([108.64628601, 75.86886597, 54.34005737],
+                    dtype=theano.config.floatX)
+
     def __init__(self, path_data=None, filename_targets=None):
         self.path_data = path_data
         self.filename_targets = filename_targets
@@ -141,13 +149,30 @@ class KaggleDR(Dataset):
         return np.array(Image.open(filename))
 
     @staticmethod
+    def standard_normalize(image):
+        """Normalize image to have zero mean and unit variance.
+
+        Subtracts channel MEAN and divides by channel STD
+
+        Parameters
+        ----------
+        image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
+                                                           theano.config.floatX
+
+        Returns
+        -------
+        image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
+                                                           theano.config.floatX
+        """
+
+        return np.divide(np.subtract(image,
+                                     KaggleDR.MEAN[:, np.newaxis, np.newaxis]),
+                         KaggleDR.STD[:, np.newaxis, np.newaxis])
+
+    @staticmethod
     def prepare_image(im):
         """
         Prepare image.
-
-        Dimensions get reordered according to theano/lasagne conventions
-        Colour channels are inverted: RGB -> BGR
-        cast to floatX
 
         Parameters
         ----------
@@ -160,11 +185,8 @@ class KaggleDR(Dataset):
 
         """
 
-        # Returned image should be (n_channels, n_rows, n_columns)
-        im = np.transpose(im, (2, 0, 1))
-        # Convert to BGR
-        im = im[::-1, :, :]
-        return floatX(im)
+        im = floatX(np.transpose(im, (2, 0, 1)))
+        return KaggleDR.standard_normalize(im)
 
     def load_batch(self, indices):
         """
