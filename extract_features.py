@@ -8,6 +8,7 @@ Christian Leibig, 2015
 """
 from __future__ import division, print_function
 import time
+
 import click
 import numpy as np
 
@@ -34,7 +35,7 @@ def main(source, filename_targets, batch_size, outfile, last_layer):
     import theano.tensor as T
     import lasagne
 
-    from modelzoo import models
+    import models
     from datasets import KaggleDR
 
     network = models.vgg19(load_weights=True)
