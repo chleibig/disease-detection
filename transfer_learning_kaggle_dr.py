@@ -67,7 +67,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     ###########################################################################
     # Transfer Learning: Train logistic regression on extracted features
     ###########################################################################
-    network = models.vgg19(batch_size=batch_size, input_var=X,
+    network = models.vgg19(input_var=X,
                            filename=os.path.join(path, 'vgg19.pkl'))
     l_out = network['prob']
 
