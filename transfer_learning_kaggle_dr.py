@@ -6,7 +6,7 @@ from util import Progplot
 
 @click.command()
 @click.option('--path', default=None, show_default=True,
-              help="Path to trainLabels.csv and feature_activations.npy.")
+              help="Path to trainLabels.csv and feature_activations.npy or training images.")
 @click.option('--batch_size', default=2, show_default=True)
 @click.option('--n_epoch', default=100, show_default=True,
               help="Number of epochs for training and validation.")
@@ -37,6 +37,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     # file
     ###########################################################################
     cnf = {
+        'labels_train': 'trainLabels.csv',
         'labels_train_val': 'trainLabels_aug.csv',
         'features_train_val': 'feature_activations_train_aug.npy',
         'labels_test': 'retinopathy_solution.csv',
@@ -48,37 +49,36 @@ def main(path, batch_size, n_epoch, split, model_file):
         #                         dtype=theano.config.floatX)
     }
 
-    X = T.matrix('X')
+    X = T.tensor4('X')
     y = T.ivector('y')
 
     ###########################################################################
     # Load features obtained via forward pass through pretrained network
     ###########################################################################
 
-    kdr = KaggleDR(filename_targets=os.path.join(path,
-                                                 cnf['labels_train_val']))
-    kdr.X = floatX(np.load(os.path.join(path,
-                                        cnf['features_train_val'])))
+    kdr = KaggleDR(path_data=os.path.join(path, "train"), filename_targets=os.path.join(path,
+                                                 cnf['labels_train']))
+    # kdr.X = floatX(np.load(os.path.join(path,
+    #                                    cnf['features_train_val'])))
+    #
+    # n_samples, n_features = kdr.X.shape
+    # # assert that we have features for all labels stored in kdr.y
+    # assert n_samples == kdr.n_samples
+    # kdr.indices_in_X = np.arange(n_samples)
+    # del n_samples
 
-    n_samples, n_features = kdr.X.shape
-    # assert that we have features for all labels stored in kdr.y
-    assert n_samples == kdr.n_samples
-    kdr.indices_in_X = np.arange(n_samples)
-    del n_samples
-
-    kdr_test = KaggleDR(filename_targets=os.path.join(path,
+    kdr_test = KaggleDR(path_data=os.path.join(path, "test"), filename_targets=os.path.join(path,
                                                       cnf['labels_test']))
-    kdr_test.X = floatX(np.load(os.path.join(path, cnf['features_test'])))
-    n_samples = kdr_test.X.shape[0]
-    # assert that we have features for all labels stored in kdr_test.y
-    assert n_samples == kdr_test.n_samples
-    kdr_test.indices_in_X = np.arange(n_samples)
+    # kdr_test.X = floatX(np.load(os.path.join(path, cnf['features_test'])))
+    # n_samples = kdr_test.X.shape[0]
+    # # assert that we have features for all labels stored in kdr_test.y
+    # assert n_samples == kdr_test.n_samples
+    # kdr_test.indices_in_X = np.arange(n_samples)
 
     ###########################################################################
     # Transfer Learning: Train logistic regression on extracted features
     ###########################################################################
-    network = models.vgg19_fc8_to_prob(batch_size=batch_size,
-                                       input_var=X, n_classes=5)
+    network = models.vgg19(batch_size=batch_size, input_var=X, filename=os.path.join(path, 'vgg19.pkl'))
     l_out = network['prob']
 
     # Scalar loss expression to be minimized during training:
@@ -124,14 +124,14 @@ def main(path, batch_size, n_epoch, split, model_file):
 
     idx_train, idx_val, _ = kdr.generate_indices(*split, shuffle=True)
 
-    print('Validation accuracy before training:')
-    progbar = Progbar(len(idx_val))
-    for batch in kdr.iterate_minibatches(idx_val, batch_size,
-                                         shuffle=False):
-        inputs, targets = batch
-        loss, acc, _ = val_fn(inputs, targets)
-        progbar.add(inputs.shape[0], values=[("val. loss", loss),
-                                             ("val. accuracy", acc)])
+    # print('Validation accuracy before training:')
+    # progbar = Progbar(len(idx_val))
+    # for batch in kdr.iterate_minibatches(idx_val, batch_size,
+    #                                      shuffle=False):
+    #     inputs, targets = batch
+    #     loss, acc, _ = val_fn(inputs, targets)
+    #     progbar.add(inputs.shape[0], values=[("val. loss", loss),
+    #                                          ("val. accuracy", acc)])
 
     ###########################################################################
     # Setup progression plot
