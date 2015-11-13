@@ -12,14 +12,12 @@ from lasagne.layers import Pool2DLayer as PoolLayer
 from lasagne.nonlinearities import softmax
 
 
-def vgg19(batch_size=None, input_var=None, filename=None):
+def vgg19(input_var=None, filename=None):
     """Setup network structure for VGG19 and optionally load pretrained
     weights
 
     Parameters
     ----------
-    batch_size : optional[int]
-        if None, not known at compile time
     input_var : Theano symbolic variable or `None` (default: `None`)
         A variable representing a network input. If it is not provided, a
         variable will be created.
@@ -44,7 +42,7 @@ def vgg19(batch_size=None, input_var=None, filename=None):
     """
 
     net = {}
-    net['input'] = InputLayer((batch_size, 3, 224, 224), input_var=input_var)
+    net['input'] = InputLayer((None, 3, 224, 224), input_var=input_var)
     net['conv1_1'] = ConvLayer(net['input'], 64, 3, pad=1)
     net['conv1_2'] = ConvLayer(net['conv1_1'], 64, 3, pad=1)
     net['pool1'] = PoolLayer(net['conv1_2'], 2)
@@ -77,7 +75,7 @@ def vgg19(batch_size=None, input_var=None, filename=None):
     return net
 
 
-def vgg19_fc7_to_prob(batch_size=None, input_var=None, filename=None,
+def vgg19_fc7_to_prob(input_var=None, filename=None,
                       n_classes=5):
     """Setup network structure for VGG19 layers fc7 and softmax output
 
@@ -85,8 +83,6 @@ def vgg19_fc7_to_prob(batch_size=None, input_var=None, filename=None,
 
     Parameters
     ----------
-    batch_size : optional[int]
-        if None, not known at compile time
     input_var : Theano symbolic variable or `None` (default: `None`)
         A variable representing a network input. If it is not provided, a
         variable will be created.
@@ -103,7 +99,7 @@ def vgg19_fc7_to_prob(batch_size=None, input_var=None, filename=None,
     """
 
     net = {}
-    net['input'] = InputLayer((batch_size, 4096), input_var=input_var)
+    net['input'] = InputLayer((None, 4096), input_var=input_var)
     net['fc7'] = DenseLayer(net['input'], num_units=4096)
     net['fc8'] = DenseLayer(net['fc7'], num_units=n_classes, nonlinearity=None)
     net['prob'] = NonlinearityLayer(net['fc8'], softmax)
@@ -114,7 +110,7 @@ def vgg19_fc7_to_prob(batch_size=None, input_var=None, filename=None,
     return net
 
 
-def vgg19_fc8_to_prob(batch_size=None, input_var=None, filename=None,
+def vgg19_fc8_to_prob(input_var=None, filename=None,
                       n_classes=5):
     """Setup network structure for retraining last layer of VGG19
 
@@ -141,7 +137,7 @@ def vgg19_fc8_to_prob(batch_size=None, input_var=None, filename=None,
     """
 
     net = {}
-    net['input'] = InputLayer((batch_size, 4096), input_var=input_var)
+    net['input'] = InputLayer((None, 4096), input_var=input_var)
     net['fc8'] = DenseLayer(net['input'], num_units=n_classes,
                             nonlinearity=None)
     net['prob'] = NonlinearityLayer(net['fc8'], softmax)
