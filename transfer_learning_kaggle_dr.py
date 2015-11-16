@@ -114,6 +114,8 @@ def main(path, batch_size, n_epoch, split, model_file):
 
     idx_train, idx_val = kdr.train_test_split(cnf['val_frac'], shuffle=True)
     idx_test = np.arange(kdr_test.n_samples)
+    # idx_train, idx_val, _ = kdr.generate_indices(0.01, 0.005, 0.005)
+    # idx_test = np.arange(100)
 
     ###########################################################################
     # Setup progression plot
@@ -173,10 +175,11 @@ def main(path, batch_size, n_epoch, split, model_file):
             val_y_hum[current:current+X_batch.shape[0]] = y_hum
             current += X_batch.shape[0]
 
-        val_acc = acc_fn(val_y_hum, val_y_pred)
+        val_acc = acc_fn(val_y_hum, val_y_pred)[0]
         val_kp = quadratic_weighted_kappa(val_y_hum, val_y_pred,
                                           cnf['n_classes'])
-
+        print("Validation accuracy: ", val_acc)
+        print("Validation kappa: ", val_kp)
         progplot.add(values=[("train loss", np.mean(train_loss)),
                              ("val. loss", np.mean(val_loss)),
                              ("val. accuracy", val_acc),
@@ -213,12 +216,11 @@ def main(path, batch_size, n_epoch, split, model_file):
         current += X_batch.shape[0]
 
 
-    test_acc = acc_fn(test_y_hum, test_y_pred)
+    test_acc = acc_fn(test_y_hum, test_y_pred)[0]
     test_kp = quadratic_weighted_kappa(test_y_hum, test_y_pred,
                                        cnf['n_classes'])
-    progplot.add(values=[("test loss", np.mean(test_loss)),
-                         ("test accuracy", test_acc),
-                         ("test kappa", test_kp)])
+    print("Test accuracy: ", test_acc)
+    print("Test kappa: ", test_kp)
 
     progplot.save()
     np.savez(os.path.join(path, model_file),
