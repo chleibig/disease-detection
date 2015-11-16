@@ -46,11 +46,13 @@ def main(path, batch_size, n_epoch, split, model_file):
         # 'test_priors': np.array([0.73478335,  0.06954962,  0.15065763,
         #                          0.02485338,  0.02015601],
         #                         dtype=theano.config.floatX)
-        'val_frac': split[1]
+        'val_frac': split[1],
+        'n_classes': 5
     }
 
     X = T.tensor4('X')
     y = T.ivector('y')
+    y_pred = T.ivector('y_pred')
 
     ###########################################################################
     # Load features obtained via forward pass through pretrained network
@@ -85,11 +87,10 @@ def main(path, batch_size, n_epoch, split, model_file):
     val_posteriors = lasagne.layers.get_output(l_out)
     val_posteriors_bal = val_posteriors * cnf['val_priors'] / \
         T.sum(val_posteriors * cnf['val_priors'], axis=1).dimshuffle(0, 'x')
-    val_labels = T.argmax(val_posteriors_bal, axis=1)
+    val_y = T.argmax(val_posteriors_bal, axis=1)
     val_loss = lasagne.objectives.categorical_crossentropy(val_posteriors_bal,
                                                            y)
     val_loss = val_loss.mean()
-    val_acc = T.mean(T.eq(val_labels, y), dtype=theano.config.floatX)
 
     # Scalar loss expression for testing - only necessary if stochasticity such
     # as dropout is involved during training
@@ -100,17 +101,16 @@ def main(path, batch_size, n_epoch, split, model_file):
     test_loss = lasagne.objectives.categorical_crossentropy(
         test_posteriors_bal, y)
     test_loss = test_loss.mean()
-    # Theano expression for classification accuracy
-    test_acc = T.mean(T.eq(test_labels, y),
-                      dtype=theano.config.floatX)
 
     # Function for one training step on minibatch
     train_fn = theano.function([X, y], loss, updates=updates)
 
-    val_fn = theano.function([X, y], [val_loss, val_acc, val_labels])
+    val_fn = theano.function([X, y], [val_loss, val_y])
+    acc = T.mean(T.eq(y_pred, y), dtype=theano.config.floatX)
+    acc_fn = theano.function([y_pred, y], [acc])
 
     # Function to compute val loss and accuracy
-    test_fn = theano.function([X, y], [test_loss, test_acc, test_labels])
+    test_fn = theano.function([X, y], [test_loss, test_labels])
 
     idx_train, idx_val = kdr.train_test_split(cnf['val_frac'], shuffle=True)
     idx_test = np.arange(kdr_test.n_samples)
@@ -130,8 +130,8 @@ def main(path, batch_size, n_epoch, split, model_file):
 
     train_loss = np.zeros(len(idx_train))
     val_loss = np.zeros(len(idx_val))
-    val_acc = np.zeros(len(idx_val))
-    val_kp = np.zeros(len(idx_val))
+    val_y_pred = np.zeros(len(idx_val), dtype=np.int32)
+    val_y_hum = np.zeros(len(idx_val), dtype=np.int32)
 
     for epoch in range(n_epoch):
         print('-'*40)
@@ -139,43 +139,48 @@ def main(path, batch_size, n_epoch, split, model_file):
         print('-'*40)
         print("Training...")
 
+        #######################################################################
+        # Training loop
+        #######################################################################
         current = 0
         train_loss[:] = 0
         progbar = Progbar(len(idx_train))
         for batch in kdr.iterate_minibatches(idx_train, batch_size,
                                              shuffle=True):
-            inputs, targets = batch
-            loss = train_fn(inputs, targets)
-            progbar.add(inputs.shape[0], values=[("train loss", loss)])
-            train_loss[current:current+inputs.shape[0]] = \
-                [loss]*inputs.shape[0]
-            current += inputs.shape[0]
+            X_batch, y_hum = batch
+            loss = train_fn(X_batch, y_hum)
+            progbar.add(X_batch.shape[0], values=[("train loss", loss)])
+            train_loss[current:current+X_batch.shape[0]] = \
+                [loss]*X_batch.shape[0]
+            current += X_batch.shape[0]
 
+        #######################################################################
+        # Validation loop
+        #######################################################################
         current = 0
         val_loss[:] = 0
-        val_acc[:] = 0
-        val_kp[:] = 0
+        val_y_pred[:] = 0
+        val_y_hum[:] = 0
         progbar = Progbar(len(idx_val))
         for batch in kdr.iterate_minibatches(idx_val, batch_size,
                                              shuffle=False):
-            inputs, targets = batch
-            loss, acc, labels = val_fn(inputs, targets)
-            kp = quadratic_weighted_kappa(targets, labels, 5)
-            progbar.add(inputs.shape[0], values=[("val. loss", loss),
-                                                 ("val. accuracy", acc),
-                                                 ("val. kappa", kp)])
-            val_loss[current:current+inputs.shape[0]] = \
-                [loss]*inputs.shape[0]
-            val_acc[current:current+inputs.shape[0]] = \
-                [acc]*inputs.shape[0]
-            val_kp[current:current+inputs.shape[0]] = \
-                [kp]*inputs.shape[0]
-            current += inputs.shape[0]
+            X_batch, y_hum = batch
+            loss, y_pred = val_fn(X_batch, y_hum)
+            progbar.add(X_batch.shape[0], values=[("val. loss", loss)])
+            val_loss[current:current+X_batch.shape[0]] = \
+                [loss]*X_batch.shape[0]
+            val_y_pred[current:current+X_batch.shape[0]] = y_pred
+            val_y_hum[current:current+X_batch.shape[0]] = y_hum
+            current += X_batch.shape[0]
+
+        val_acc = acc_fn(val_y_hum, val_y_pred)
+        val_kp = quadratic_weighted_kappa(val_y_hum, val_y_pred,
+                                          cnf['n_classes'])
 
         progplot.add(values=[("train loss", np.mean(train_loss)),
                              ("val. loss", np.mean(val_loss)),
-                             ("val. accuracy", np.mean(val_acc)),
-                             ("val. kappa", np.mean(val_kp))])
+                             ("val. accuracy", val_acc),
+                             ("val. kappa", val_kp)])
 
     print("Training took {:.3g} sec.".format(time.time() - start_time))
 
@@ -186,34 +191,34 @@ def main(path, batch_size, n_epoch, split, model_file):
     ###########################################################################
 
     test_loss = np.zeros(kdr_test.n_samples)
-    test_acc = np.zeros(kdr_test.n_samples)
-    test_kp = np.zeros(kdr_test.n_samples)
+    test_y_pred = np.zeros(kdr_test.n_samples, dtype=np.int32)
+    test_y_hum = np.zeros(kdr_test.n_samples, dtype=np.int32)
 
     print("Testing...")
     current = 0
     test_loss[:] = 0
-    test_acc[:] = 0
-    test_kp[:] = 0
+    test_y_pred[:] = 0
+    test_y_hum[:] = 0
+
     progbar = Progbar(kdr_test.n_samples)
     for batch in kdr_test.iterate_minibatches(idx_test,
                                               batch_size, shuffle=False):
-        inputs, targets = batch
-        loss, acc, labels = test_fn(inputs, targets)
-        kp = quadratic_weighted_kappa(targets, labels, 5)
-        progbar.add(inputs.shape[0], values=[("test loss", loss),
-                                             ("test accuracy", acc),
-                                             ("test kappa", kp)])
-        test_loss[current:current+inputs.shape[0]] = \
-            [loss]*inputs.shape[0]
-        test_acc[current:current+inputs.shape[0]] = \
-            [acc]*inputs.shape[0]
-        test_kp[current:current+inputs.shape[0]] = \
-            [kp]*inputs.shape[0]
-        current += inputs.shape[0]
+        X_batch, y_hum = batch
+        loss, y_pred = test_fn(X_batch, y_hum)
+        progbar.add(X_batch.shape[0], values=[("test loss", loss)])
+        test_loss[current:current+X_batch.shape[0]] = \
+            [loss]*X_batch.shape[0]
+        test_y_pred[current:current+X_batch.shape[0]] = y_pred
+        test_y_hum[current:current+X_batch.shape[0]] = y_hum
+        current += X_batch.shape[0]
 
+
+    test_acc = acc_fn(test_y_hum, test_y_pred)
+    test_kp = quadratic_weighted_kappa(test_y_hum, test_y_pred,
+                                       cnf['n_classes'])
     progplot.add(values=[("test loss", np.mean(test_loss)),
-                         ("test accuracy", np.mean(test_acc)),
-                         ("test kappa", np.mean(test_kp))])
+                         ("test accuracy", test_acc),
+                         ("test kappa", test_kp)])
 
     progplot.save()
     np.savez(os.path.join(path, model_file),
