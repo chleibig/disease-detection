@@ -163,7 +163,7 @@ def load_weights(layer, filename):
     """
 
     if filename.endswith('.npz'):
-        with np.load('model.npz') as f:
+        with np.load(filename) as f:
             param_values = [f['arr_%d' % i] for i in range(len(f.files))]
         set_all_param_values(layer, param_values)
         return
