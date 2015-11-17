@@ -5,6 +5,8 @@ import pandas as pd
 from PIL import Image
 from lasagne.utils import floatX
 import theano
+import sklearn.cross_validation as skcv
+import warnings
 
 
 class Dataset(object):
@@ -14,6 +16,10 @@ class Dataset(object):
 
     @abstractproperty
     def n_samples(self):
+        pass
+
+    @abstractproperty
+    def y(self):
         pass
 
     @abstractmethod
@@ -52,6 +58,10 @@ class Dataset(object):
 
         """
 
+        warnings.warn('This function does not provide the same relative '
+                      'class frequencies in the splits. You might want to '
+                      'check the function train_test_split')
+
         assert train_frac + val_frac + test_frac <= 1.0
 
         train_size = int(np.ceil(self.n_samples*train_frac))
@@ -69,6 +79,27 @@ class Dataset(object):
                                                          self.n_samples)]
 
         return train_indices, val_indices, test_indices
+
+    def train_test_split(self, test_frac, shuffle=False):
+        """Return a single split into training and test data
+           Both splits have approximately the same relative class frequencies
+
+        Parameters
+        ----------
+        test_frac : float [0,1]
+            fraction of data used for testing, 1 - test_frac is used for
+            training
+        shuffle : boolean (False by default)
+            shuffle indices
+
+        Returns
+        -------
+        train_indices, test_indices : nd-arrays
+
+        """
+
+        return next(skcv.StratifiedKFold(self.y, n_folds=1/test_frac,
+                                         shuffle=shuffle).__iter__())
 
     def iterate_minibatches(self, indices, batch_size, shuffle=False):
         """
@@ -117,7 +148,7 @@ class KaggleDR(Dataset):
         labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
         self.image_filenames = labels['image']
         # we store all labels
-        self.y = np.array(labels['level'])
+        self._y = np.array(labels['level'])
         self._n_samples = len(self.y)
         # we might cache some data later on
         self.X = None
@@ -129,6 +160,11 @@ class KaggleDR(Dataset):
     def n_samples(self):
         """Number of samples in the entire dataset"""
         return self._n_samples
+
+    @property
+    def y(self):
+        """Labels"""
+        return self._y
 
     def load_image(self, filename):
         """
