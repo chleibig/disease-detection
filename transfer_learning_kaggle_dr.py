@@ -5,20 +5,47 @@ from util import Progplot
 
 
 @click.command()
-@click.option('--path', default=None, show_default=True,
-              help="Path to trainLabels.csv and feature_activations.npy or training images.")
-@click.option('--batch_size', default=2, show_default=True)
-@click.option('--n_epoch', default=100, show_default=True,
-              help="Number of epochs for training and validation.")
-@click.option('--split', nargs=3, type=float, default=(0.9, 0.1, 0.0),
-              help="Fraction of samples to be used for train, val and test "
-                   "respectively.")
-@click.option('--weights', default='vgg19.pkl', show_default=True,
-              help="Filename for pre-trained weights.")
-@click.option('--model_file', default='model.npz', show_default=True,
-              help="Filename for model dump.")
-def main(path, batch_size, n_epoch, split, weights, model_file):
+@click.option('--config_file', default='config.json', show_default=True,
+              help="(JSON) configuration file.")
+def main(config_file):
     """Perform transfer learning on Kaggle's Diabetic Retinopathy competition.
+
+    \b
+    Parameters
+    ----------
+    \b
+    config_file: json file
+        content of example.json:
+        {
+            // Path to data (labels, image folders or feature activations)
+            "path": "/home/cl/data_kaggle_dr/o_O" ,
+            "batch_size": 2,
+            // Number of epochs for training and validation
+            "n_epoch": 10,
+            // Learning rate used throughout "n_epochs":
+            "learning_rate": 1e-4,
+            // Fraction of training data used for training and validation
+            // respectively:
+            "train_size": 0.9,
+            "val_size": 0.1,
+            // Fraction of test data used for testing:
+            "test_size": 1.0,
+            // File with initial weights under "path":
+            "weights_init": "vgg19.pkl",
+            // File to dump weights to under "path":
+            "weights_dump": "weights_dump.npz",
+            // File with training labels under "path". "val_frac" of those is
+            // taken for validation:
+            "labels_train": "trainLabels.csv",
+            // File with test labels under "path":
+            "labels_test": "retinopathy_solution.csv",
+            // Number of classes to adopt the original architecture to:
+            "n_classes": 5
+            // Priors (if uniform they have no influence):
+            "val_priors": [0.2, 0.2, 0.2, 0.2, 0.2],
+            "test_priors": [0.2, 0.2, 0.2, 0.2, 0.2]
+        }
+
     """
 
     import os
@@ -28,51 +55,52 @@ def main(path, batch_size, n_epoch, split, weights, model_file):
     import theano.tensor as T
     import lasagne
     from keras.utils.generic_utils import Progbar
+    import json
 
     import models
     from datasets import KaggleDR
     from util import quadratic_weighted_kappa
 
     ###########################################################################
-    # Parameters - once the API for this code is clear, move these to a config
-    # file
+    # Parse configuration
     ###########################################################################
-    cnf = {
-        'labels_train': 'trainLabels.csv',
-        'labels_train_val': 'trainLabels_aug.csv',
-        'features_train_val': 'feature_activations_train_aug.npy',
-        'labels_test': 'retinopathy_solution.csv',
-        'features_test': 'feature_activations_test.npy',
-        'val_priors': np.array(5*[1/5.], dtype=theano.config.floatX),
-        'test_priors': np.array(5*[1/5.], dtype=theano.config.floatX),
-        # 'test_priors': np.array([0.73478335,  0.06954962,  0.15065763,
-        #                          0.02485338,  0.02015601],
-        #                         dtype=theano.config.floatX)
-        'val_frac': split[1],
-        'n_classes': 5
-    }
+    with open(config_file) as json_file:
+        config = json.load(json_file)
 
+    path = config['path']
+    batch_size = config['batch_size']
+    n_epoch = config['n_epoch']
+    learning_rate = config['learning_rate']
+    train_size = config['train_size'] # will be used once
+    # StratifiedShuffleSplit is used as implementation of train_test_split
+    val_size = config['val_size']
+    test_size = config['test_size']
+    weights_init = config['weights_init']
+    weights_dump = config['weights_dump']
+    labels_train = config['labels_train']
+    labels_test = config['labels_test']
+    n_classes = config['n_classes']
+    val_priors = np.array(config['val_priors'], dtype=theano.config.floatX)
+    test_priors = np.array(config['test_priors'], dtype=theano.config.floatX)
+    assert len(val_priors) == len(test_priors) == n_classes, \
+        'Mismatch between number of classes and priors'
+    ###########################################################################
+
+    # Initialize symbolic variables
     X = T.tensor4('X')
     y = T.ivector('y')
     y_pred = T.ivector('y_pred')
 
-    ###########################################################################
-    # Load features obtained via forward pass through pretrained network
-    ###########################################################################
-
+    # Initialize DAOs (data access objects)
     kdr = KaggleDR(path_data=os.path.join(path, "train"),
-                   filename_targets=os.path.join(path,
-                                                 cnf['labels_train']))
-
+                   filename_targets=os.path.join(path, labels_train))
     kdr_test = KaggleDR(path_data=os.path.join(path, "test"),
-                        filename_targets=os.path.join(path,
-                                                      cnf['labels_test']))
+                        filename_targets=os.path.join(path, labels_test))
 
-    ###########################################################################
-    # Transfer Learning: Train logistic regression on extracted features
-    ###########################################################################
+    # TODO: How is the number of classes determined?!
     network = models.vgg19(input_var=X,
-                           filename=os.path.join(path, weights))
+                           filename=os.path.join(path, weights_init))
+
     l_out = network['prob']
 
     # Scalar loss expression to be minimized during training:
@@ -83,12 +111,15 @@ def main(path, batch_size, n_epoch, split, weights, model_file):
     params = lasagne.layers.get_all_params(l_out, trainable=True)
 
     updates = lasagne.updates.nesterov_momentum(loss, params,
-                                                learning_rate=1e-4,
+                                                learning_rate=learning_rate,
                                                 momentum=0.9)
 
-    val_posteriors = lasagne.layers.get_output(l_out)
-    val_posteriors_bal = val_posteriors * cnf['val_priors'] / \
-        T.sum(val_posteriors * cnf['val_priors'], axis=1).dimshuffle(0, 'x')
+    # Scalar loss expression for validation - only necessary if
+    # stochasticity such
+    # as dropout is involved during training
+    val_posteriors = lasagne.layers.get_output(l_out, deterministic=True)
+    val_posteriors_bal = val_posteriors * val_priors / \
+        T.sum(val_posteriors * val_priors, axis=1).dimshuffle(0, 'x')
     val_y = T.argmax(val_posteriors_bal, axis=1)
     val_loss = lasagne.objectives.categorical_crossentropy(val_posteriors_bal,
                                                            y)
@@ -97,8 +128,8 @@ def main(path, batch_size, n_epoch, split, weights, model_file):
     # Scalar loss expression for testing - only necessary if stochasticity such
     # as dropout is involved during training
     test_posteriors = lasagne.layers.get_output(l_out, deterministic=True)
-    test_posteriors_bal = test_posteriors * cnf['test_priors'] / \
-        T.sum(test_posteriors * cnf['test_priors'], axis=1).dimshuffle(0, 'x')
+    test_posteriors_bal = test_posteriors * test_priors / \
+        T.sum(test_posteriors * test_priors, axis=1).dimshuffle(0, 'x')
     test_labels = T.argmax(test_posteriors_bal, axis=1)
     test_loss = lasagne.objectives.categorical_crossentropy(
         test_posteriors_bal, y)
@@ -114,10 +145,11 @@ def main(path, batch_size, n_epoch, split, weights, model_file):
     # Function to compute val loss and accuracy
     test_fn = theano.function([X, y], [test_loss, test_labels])
 
-    idx_train, idx_val = kdr.train_test_split(cnf['val_frac'], shuffle=True)
-    idx_test = np.arange(kdr_test.n_samples)
-    # idx_train, idx_val, _ = kdr.generate_indices(0.01, 0.005, 0.005)
-    # idx_test = np.arange(100)
+    idx_train, idx_val = kdr.train_test_split(val_size, shuffle=True)
+    idx_test = np.arange(min(test_size*kdr_test.n_samples,
+                             kdr_test.n_samples))
+    # idx_train, idx_val, _ = kdr.generate_indices(train_size, val_size,
+    #                                              test_size)
 
     ###########################################################################
     # Setup progression plot
@@ -125,7 +157,6 @@ def main(path, batch_size, n_epoch, split, weights, model_file):
     progplot = Progplot(n_epoch,
                         "epochs (batch_size "+str(batch_size)+")")
     ###########################################################################
-
 
     ###########################################################################
     # Training
@@ -178,8 +209,7 @@ def main(path, batch_size, n_epoch, split, weights, model_file):
             current += X_batch.shape[0]
 
         val_acc = acc_fn(val_y_hum, val_y_pred)[0]
-        val_kp = quadratic_weighted_kappa(val_y_hum, val_y_pred,
-                                          cnf['n_classes'])
+        val_kp = quadratic_weighted_kappa(val_y_hum, val_y_pred, n_classes)
         print("Validation accuracy: ", val_acc)
         print("Validation kappa: ", val_kp)
         progplot.add(values=[("train loss", np.mean(train_loss)),
@@ -217,15 +247,13 @@ def main(path, batch_size, n_epoch, split, weights, model_file):
         test_y_hum[current:current+X_batch.shape[0]] = y_hum
         current += X_batch.shape[0]
 
-
     test_acc = acc_fn(test_y_hum, test_y_pred)[0]
-    test_kp = quadratic_weighted_kappa(test_y_hum, test_y_pred,
-                                       cnf['n_classes'])
+    test_kp = quadratic_weighted_kappa(test_y_hum, test_y_pred, n_classes)
     print("Test accuracy: ", test_acc)
     print("Test kappa: ", test_kp)
 
     progplot.save()
-    np.savez(os.path.join(path, model_file),
+    np.savez(os.path.join(path, weights_dump),
              *lasagne.layers.get_all_param_values(l_out))
 
 if __name__ == '__main__':
