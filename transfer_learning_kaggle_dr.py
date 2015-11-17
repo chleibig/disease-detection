@@ -13,6 +13,8 @@ from util import Progplot
 @click.option('--split', nargs=3, type=float, default=(0.9, 0.1, 0.0),
               help="Fraction of samples to be used for train, val and test "
                    "respectively.")
+@click.option('--weights', default='vgg19.pkl', show_default=True,
+              help="Filename for pre-trained weights.")
 @click.option('--model_file', default='model.npz', show_default=True,
               help="Filename for model dump.")
 def main(path, batch_size, n_epoch, split, model_file):
@@ -46,6 +48,7 @@ def main(path, batch_size, n_epoch, split, model_file):
         # 'test_priors': np.array([0.73478335,  0.06954962,  0.15065763,
         #                          0.02485338,  0.02015601],
         #                         dtype=theano.config.floatX)
+        'trained_weights': 'weights',
         'val_frac': split[1],
         'n_classes': 5
     }
@@ -70,7 +73,7 @@ def main(path, batch_size, n_epoch, split, model_file):
     # Transfer Learning: Train logistic regression on extracted features
     ###########################################################################
     network = models.vgg19(input_var=X,
-                           filename=os.path.join(path, 'vgg19.pkl'))
+                           filename=os.path.join(path, cnf['trained_weights']))
     l_out = network['prob']
 
     # Scalar loss expression to be minimized during training:
