@@ -17,7 +17,7 @@ from util import Progplot
               help="Filename for pre-trained weights.")
 @click.option('--model_file', default='model.npz', show_default=True,
               help="Filename for model dump.")
-def main(path, batch_size, n_epoch, split, model_file):
+def main(path, batch_size, n_epoch, split, weights, model_file):
     """Perform transfer learning on Kaggle's Diabetic Retinopathy competition.
     """
 
