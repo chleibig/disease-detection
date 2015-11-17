@@ -48,7 +48,6 @@ def main(path, batch_size, n_epoch, split, weights, model_file):
         # 'test_priors': np.array([0.73478335,  0.06954962,  0.15065763,
         #                          0.02485338,  0.02015601],
         #                         dtype=theano.config.floatX)
-        'trained_weights': 'weights',
         'val_frac': split[1],
         'n_classes': 5
     }
@@ -73,7 +72,7 @@ def main(path, batch_size, n_epoch, split, weights, model_file):
     # Transfer Learning: Train logistic regression on extracted features
     ###########################################################################
     network = models.vgg19(input_var=X,
-                           filename=os.path.join(path, cnf['trained_weights']))
+                           filename=os.path.join(path, weights))
     l_out = network['prob']
 
     # Scalar loss expression to be minimized during training:
