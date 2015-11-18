@@ -147,7 +147,7 @@ def main(config_file):
 
     idx_train, idx_val = kdr.train_test_split(val_size, shuffle=True)
     idx_test = np.arange(min(test_size*kdr_test.n_samples,
-                             kdr_test.n_samples), np.int32)
+                             kdr_test.n_samples), dtype=np.int32)
     # idx_train, idx_val, _ = kdr.generate_indices(train_size, val_size,
     #                                              test_size)
 
