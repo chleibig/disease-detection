@@ -12,7 +12,7 @@ from lasagne.layers import Pool2DLayer as PoolLayer
 from lasagne.nonlinearities import softmax
 
 
-def vgg19(input_var=None, filename=None):
+def vgg19(input_var=None, filename=None, n_classes=1000):
     """Setup network structure for VGG19 and optionally load pretrained
     weights
 
@@ -23,6 +23,8 @@ def vgg19(input_var=None, filename=None):
         variable will be created.
     filename : Optional[str]
         if filename is not None, weights are loaded from filename
+    n_classes : Optional[int]
+        default 1000 for weights trained on ImageNet
 
     Returns
     -------
@@ -66,7 +68,7 @@ def vgg19(input_var=None, filename=None):
     net['pool5'] = PoolLayer(net['conv5_4'], 2)
     net['fc6'] = DenseLayer(net['pool5'], num_units=4096)
     net['fc7'] = DenseLayer(net['fc6'], num_units=4096)
-    net['fc8'] = DenseLayer(net['fc7'], num_units=1000, nonlinearity=None)
+    net['fc8'] = DenseLayer(net['fc7'], num_units=n_classes, nonlinearity=None)
     net['prob'] = NonlinearityLayer(net['fc8'], softmax)
 
     if filename is not None:

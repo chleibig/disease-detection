@@ -97,9 +97,9 @@ def main(config_file):
     kdr_test = KaggleDR(path_data=os.path.join(path, "test"),
                         filename_targets=os.path.join(path, labels_test))
 
-    # TODO: How is the number of classes determined?!
     network = models.vgg19(input_var=X,
-                           filename=os.path.join(path, weights_init))
+                           filename=os.path.join(path, weights_init),
+                           n_classes=n_classes)
 
     l_out = network['prob']
 
