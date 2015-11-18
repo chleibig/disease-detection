@@ -2,7 +2,8 @@ from __future__ import print_function, division
 
 import click
 from util import Progplot
-
+from lasagne.layers import DenseLayer, NonlinearityLayer
+from lasagne.nonlinearities import softmax
 
 @click.command()
 @click.option('--config_file', default='config.json', show_default=True,
@@ -100,6 +101,12 @@ def main(config_file):
     network = models.vgg19(input_var=X,
                            filename=os.path.join(path, weights_init),
                            n_classes=n_classes)
+
+    # Retrain last layers separately
+    network['fc7'] = DenseLayer(network['fc6'], num_units=4096)
+    network['fc8'] = DenseLayer(network['fc7'], num_units=n_classes,
+                                nonlinearity=None)
+    network['prob'] = NonlinearityLayer(network['fc8'], softmax)
 
     l_out = network['prob']
 
