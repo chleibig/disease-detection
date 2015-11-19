@@ -1,4 +1,6 @@
 from __future__ import print_function, division
+from lasagne.layers import DenseLayer, NonlinearityLayer
+from lasagne.nonlinearities import softmax
 
 import click
 from util import Progplot
@@ -98,8 +100,11 @@ def main(config_file):
                         filename_targets=os.path.join(path, labels_test))
 
     network = models.vgg19(input_var=X,
-                           filename=os.path.join(path, weights_init),
-                           n_classes=n_classes)
+                           filename=os.path.join(path, weights_init), p=0.5)
+
+    network['fc8'] = DenseLayer(network['dropout2'], num_units=n_classes,
+                                nonlinearity=None)
+    network['prob'] = NonlinearityLayer(network['fc8'], softmax)
 
     l_out = network['prob']
 
