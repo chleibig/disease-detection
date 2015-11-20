@@ -1,22 +1,53 @@
 from __future__ import print_function, division
+from lasagne.layers import DenseLayer, NonlinearityLayer
+from lasagne.nonlinearities import softmax
 
 import click
 from util import Progplot
 
 
 @click.command()
-@click.option('--path', default=None, show_default=True,
-              help="Path to trainLabels.csv and feature_activations.npy.")
-@click.option('--batch_size', default=2, show_default=True)
-@click.option('--n_epoch', default=100, show_default=True,
-              help="Number of epochs for training and validation.")
-@click.option('--split', nargs=3, type=float, default=(0.9, 0.1, 0.0),
-              help="Fraction of samples to be used for train, val and test "
-                   "respectively.")
-@click.option('--model_file', default='model.npz', show_default=True,
-              help="Filename for model dump.")
-def main(path, batch_size, n_epoch, split, model_file):
+@click.option('--config_file', default='config.json', show_default=True,
+              help="(JSON) configuration file.")
+def main(config_file):
     """Perform transfer learning on Kaggle's Diabetic Retinopathy competition.
+
+    \b
+    Parameters
+    ----------
+    \b
+    config_file: json file
+        content of example.json:
+        {
+            // Path to data (labels, image folders or feature activations)
+            "path": "/home/cl/data_kaggle_dr/o_O" ,
+            "batch_size": 2,
+            // Number of epochs for training and validation
+            "n_epoch": 10,
+            // Learning rate used throughout "n_epochs":
+            "learning_rate": 1e-4,
+            // Fraction of training data used for training and validation
+            // respectively:
+            "train_size": 0.9,
+            "val_size": 0.1,
+            // Fraction of test data used for testing:
+            "test_size": 1.0,
+            // File with initial weights under "path":
+            "weights_init": "vgg19.pkl",
+            // File to dump weights to under "path":
+            "weights_dump": "weights_dump.npz",
+            // File with training labels under "path". "val_frac" of those is
+            // taken for validation:
+            "labels_train": "trainLabels.csv",
+            // File with test labels under "path":
+            "labels_test": "retinopathy_solution.csv",
+            // Number of classes to adopt the original architecture to:
+            "n_classes": 5
+            // Priors (if uniform they have no influence):
+            "val_priors": [0.2, 0.2, 0.2, 0.2, 0.2],
+            "test_priors": [0.2, 0.2, 0.2, 0.2, 0.2]
+        }
+
     """
 
     import os
@@ -25,60 +56,55 @@ def main(path, batch_size, n_epoch, split, model_file):
     import theano
     import theano.tensor as T
     import lasagne
-    from lasagne.utils import floatX
     from keras.utils.generic_utils import Progbar
+    import json
 
     import models
     from datasets import KaggleDR
     from util import quadratic_weighted_kappa
 
     ###########################################################################
-    # Parameters - once the API for this code is clear, move these to a config
-    # file
+    # Parse configuration
     ###########################################################################
-    cnf = {
-        'labels_train_val': 'trainLabels_aug.csv',
-        'features_train_val': 'feature_activations_train_aug.npy',
-        'labels_test': 'retinopathy_solution.csv',
-        'features_test': 'feature_activations_test.npy',
-        'val_priors': np.array(5*[1/5.], dtype=theano.config.floatX),
-        'test_priors': np.array(5*[1/5.], dtype=theano.config.floatX)
-        # 'test_priors': np.array([0.73478335,  0.06954962,  0.15065763,
-        #                          0.02485338,  0.02015601],
-        #                         dtype=theano.config.floatX)
-    }
+    with open(config_file) as json_file:
+        config = json.load(json_file)
 
-    X = T.matrix('X')
+    path = config['path']
+    batch_size = config['batch_size']
+    n_epoch = config['n_epoch']
+    learning_rate = config['learning_rate']
+    train_size = config['train_size']
+    val_size = config['val_size']
+    test_size = config['test_size']
+    weights_init = config['weights_init']
+    weights_dump = config['weights_dump']
+    labels_train = config['labels_train']
+    labels_test = config['labels_test']
+    n_classes = config['n_classes']
+    val_priors = np.array(config['val_priors'], dtype=theano.config.floatX)
+    test_priors = np.array(config['test_priors'], dtype=theano.config.floatX)
+    assert len(val_priors) == len(test_priors) == n_classes, \
+        'Mismatch between number of classes and priors'
+    ###########################################################################
+
+    # Initialize symbolic variables
+    X = T.tensor4('X')
     y = T.ivector('y')
+    y_pred = T.ivector('y_pred')
 
-    ###########################################################################
-    # Load features obtained via forward pass through pretrained network
-    ###########################################################################
+    # Initialize DAOs (data access objects)
+    kdr = KaggleDR(path_data=os.path.join(path, "train"),
+                   filename_targets=os.path.join(path, labels_train))
+    kdr_test = KaggleDR(path_data=os.path.join(path, "test"),
+                        filename_targets=os.path.join(path, labels_test))
 
-    kdr = KaggleDR(filename_targets=os.path.join(path,
-                                                 cnf['labels_train_val']))
-    kdr.X = floatX(np.load(os.path.join(path,
-                                        cnf['features_train_val'])))
+    network = models.vgg19(input_var=X,
+                           filename=os.path.join(path, weights_init), p=0.5)
 
-    n_samples, n_features = kdr.X.shape
-    # assert that we have features for all labels stored in kdr.y
-    assert n_samples == kdr.n_samples
-    kdr.indices_in_X = np.arange(n_samples)
-    del n_samples
+    network['fc8'] = DenseLayer(network['dropout2'], num_units=n_classes,
+                                nonlinearity=None)
+    network['prob'] = NonlinearityLayer(network['fc8'], softmax)
 
-    kdr_test = KaggleDR(filename_targets=os.path.join(path,
-                                                      cnf['labels_test']))
-    kdr_test.X = floatX(np.load(os.path.join(path, cnf['features_test'])))
-    n_samples = kdr_test.X.shape[0]
-    # assert that we have features for all labels stored in kdr_test.y
-    assert n_samples == kdr_test.n_samples
-    kdr_test.indices_in_X = np.arange(n_samples)
-
-    ###########################################################################
-    # Transfer Learning: Train logistic regression on extracted features
-    ###########################################################################
-    network = models.vgg19_fc8_to_prob(batch_size=batch_size,
-                                       input_var=X, n_classes=5)
     l_out = network['prob']
 
     # Scalar loss expression to be minimized during training:
@@ -89,49 +115,44 @@ def main(path, batch_size, n_epoch, split, model_file):
     params = lasagne.layers.get_all_params(l_out, trainable=True)
 
     updates = lasagne.updates.nesterov_momentum(loss, params,
-                                                learning_rate=1e-4,
+                                                learning_rate=learning_rate,
                                                 momentum=0.9)
 
-    val_posteriors = lasagne.layers.get_output(l_out)
-    val_posteriors_bal = val_posteriors * cnf['val_priors'] / \
-        T.sum(val_posteriors * cnf['val_priors'], axis=1).dimshuffle(0, 'x')
-    val_labels = T.argmax(val_posteriors_bal, axis=1)
+    # Scalar loss expression for validation - only necessary if
+    # stochasticity such
+    # as dropout is involved during training
+    val_posteriors = lasagne.layers.get_output(l_out, deterministic=True)
+    val_posteriors_bal = val_posteriors * val_priors / \
+        T.sum(val_posteriors * val_priors, axis=1).dimshuffle(0, 'x')
+    val_y = T.argmax(val_posteriors_bal, axis=1)
     val_loss = lasagne.objectives.categorical_crossentropy(val_posteriors_bal,
                                                            y)
     val_loss = val_loss.mean()
-    val_acc = T.mean(T.eq(val_labels, y), dtype=theano.config.floatX)
 
     # Scalar loss expression for testing - only necessary if stochasticity such
     # as dropout is involved during training
     test_posteriors = lasagne.layers.get_output(l_out, deterministic=True)
-    test_posteriors_bal = test_posteriors * cnf['test_priors'] / \
-        T.sum(test_posteriors * cnf['test_priors'], axis=1).dimshuffle(0, 'x')
+    test_posteriors_bal = test_posteriors * test_priors / \
+        T.sum(test_posteriors * test_priors, axis=1).dimshuffle(0, 'x')
     test_labels = T.argmax(test_posteriors_bal, axis=1)
     test_loss = lasagne.objectives.categorical_crossentropy(
         test_posteriors_bal, y)
     test_loss = test_loss.mean()
-    # Theano expression for classification accuracy
-    test_acc = T.mean(T.eq(test_labels, y),
-                      dtype=theano.config.floatX)
 
     # Function for one training step on minibatch
     train_fn = theano.function([X, y], loss, updates=updates)
 
-    val_fn = theano.function([X, y], [val_loss, val_acc, val_labels])
+    val_fn = theano.function([X, y], [val_loss, val_y])
+    acc = T.mean(T.eq(y_pred, y), dtype=theano.config.floatX)
+    acc_fn = theano.function([y_pred, y], [acc])
 
     # Function to compute val loss and accuracy
-    test_fn = theano.function([X, y], [test_loss, test_acc, test_labels])
+    test_fn = theano.function([X, y], [test_loss, test_labels])
 
-    idx_train, idx_val, _ = kdr.generate_indices(*split, shuffle=True)
-
-    print('Validation accuracy before training:')
-    progbar = Progbar(len(idx_val))
-    for batch in kdr.iterate_minibatches(idx_val, batch_size,
-                                         shuffle=False):
-        inputs, targets = batch
-        loss, acc, _ = val_fn(inputs, targets)
-        progbar.add(inputs.shape[0], values=[("val. loss", loss),
-                                             ("val. accuracy", acc)])
+    idx_train, idx_val = kdr.train_test_split(test_size=val_size,
+                                              train_size=train_size)
+    idx_test = np.arange(min(test_size*kdr_test.n_samples,
+                             kdr_test.n_samples), dtype=np.int32)
 
     ###########################################################################
     # Setup progression plot
@@ -144,10 +165,11 @@ def main(path, batch_size, n_epoch, split, model_file):
     # Training
     ###########################################################################
     start_time = time.time()
+
     train_loss = np.zeros(len(idx_train))
-    test_loss = np.zeros(kdr_test.n_samples)
-    test_acc = np.zeros(kdr_test.n_samples)
-    test_kp = np.zeros(kdr_test.n_samples)
+    val_loss = np.zeros(len(idx_val))
+    val_y_pred = np.zeros(len(idx_val), dtype=np.int32)
+    val_y_hum = np.zeros(len(idx_val), dtype=np.int32)
 
     for epoch in range(n_epoch):
         print('-'*40)
@@ -155,63 +177,86 @@ def main(path, batch_size, n_epoch, split, model_file):
         print('-'*40)
         print("Training...")
 
+        #######################################################################
+        # Training loop
+        #######################################################################
         current = 0
         train_loss[:] = 0
         progbar = Progbar(len(idx_train))
         for batch in kdr.iterate_minibatches(idx_train, batch_size,
                                              shuffle=True):
-            inputs, targets = batch
-            loss = train_fn(inputs, targets)
-            progbar.add(inputs.shape[0], values=[("train loss", loss)])
-            train_loss[current:current+inputs.shape[0]] = \
-                [loss]*inputs.shape[0]
-            current += inputs.shape[0]
+            X_batch, y_hum = batch
+            loss = train_fn(X_batch, y_hum)
+            progbar.add(X_batch.shape[0], values=[("train loss", loss)])
+            train_loss[current:current+X_batch.shape[0]] = \
+                [loss]*X_batch.shape[0]
+            current += X_batch.shape[0]
 
-        # progbar = Progbar(len(idx_val))
-        # for batch in kdr.iterate_minibatches(idx_val, batch_size,
-        #                                      shuffle=False):
-        #     inputs, targets = batch
-        #     loss, acc, labels = val_fn(inputs, targets)
-        #     kp = quadratic_weighted_kappa(targets, labels, 5)
-        #     progbar.add(inputs.shape[0], values=[("val. loss", loss),
-        #                                          ("val. accuracy",
-        #                                           acc),
-        #                                          ("val. kappa", kp)])
-        #     progplot.add(values=[("val. loss", loss),
-        #                          ("val. accuracy", acc),
-        #                          ("val. kappa", kp)])
-
-        print("Testing...")
+        #######################################################################
+        # Validation loop
+        #######################################################################
         current = 0
-        test_loss[:] = 0
-        test_acc[:] = 0
-        test_kp[:] = 0
-        progbar = Progbar(kdr_test.n_samples)
-        for batch in kdr_test.iterate_minibatches(kdr_test.indices_in_X,
-                                                  batch_size, shuffle=False):
-            inputs, targets = batch
-            loss, acc, labels = test_fn(inputs, targets)
-            kp = quadratic_weighted_kappa(targets, labels, 5)
-            progbar.add(inputs.shape[0], values=[("test loss", loss),
-                                                 ("test accuracy", acc),
-                                                 ("test kappa", kp)])
-            test_loss[current:current+inputs.shape[0]] = \
-                [loss]*inputs.shape[0]
-            test_acc[current:current+inputs.shape[0]] = \
-                [acc]*inputs.shape[0]
-            test_kp[current:current+inputs.shape[0]] = \
-                [kp]*inputs.shape[0]
-            current += inputs.shape[0]
+        val_loss[:] = 0
+        val_y_pred[:] = 0
+        val_y_hum[:] = 0
+        progbar = Progbar(len(idx_val))
+        for batch in kdr.iterate_minibatches(idx_val, batch_size,
+                                             shuffle=False):
+            X_batch, y_hum = batch
+            loss, y_pred = val_fn(X_batch, y_hum)
+            progbar.add(X_batch.shape[0], values=[("val. loss", loss)])
+            val_loss[current:current+X_batch.shape[0]] = \
+                [loss]*X_batch.shape[0]
+            val_y_pred[current:current+X_batch.shape[0]] = y_pred
+            val_y_hum[current:current+X_batch.shape[0]] = y_hum
+            current += X_batch.shape[0]
 
+        val_acc = acc_fn(val_y_hum, val_y_pred)[0]
+        val_kp = quadratic_weighted_kappa(val_y_hum, val_y_pred, n_classes)
+        print("Validation accuracy: ", val_acc)
+        print("Validation kappa: ", val_kp)
         progplot.add(values=[("train loss", np.mean(train_loss)),
-                             ("test loss", np.mean(test_loss)),
-                             ("test accuracy", np.mean(test_acc)),
-                             ("test kappa", np.mean(test_kp))])
+                             ("val. loss", np.mean(val_loss)),
+                             ("val. accuracy", val_acc),
+                             ("val. kappa", val_kp)])
 
-        print("Training took {:.3g} sec.".format(time.time() - start_time))
+    print("Training took {:.3g} sec.".format(time.time() - start_time))
+
+    del kdr
+
+    ###########################################################################
+    # Testing
+    ###########################################################################
+
+    test_loss = np.zeros(kdr_test.n_samples)
+    test_y_pred = np.zeros(kdr_test.n_samples, dtype=np.int32)
+    test_y_hum = np.zeros(kdr_test.n_samples, dtype=np.int32)
+
+    print("Testing...")
+    current = 0
+    test_loss[:] = 0
+    test_y_pred[:] = 0
+    test_y_hum[:] = 0
+
+    progbar = Progbar(kdr_test.n_samples)
+    for batch in kdr_test.iterate_minibatches(idx_test,
+                                              batch_size, shuffle=False):
+        X_batch, y_hum = batch
+        loss, y_pred = test_fn(X_batch, y_hum)
+        progbar.add(X_batch.shape[0], values=[("test loss", loss)])
+        test_loss[current:current+X_batch.shape[0]] = \
+            [loss]*X_batch.shape[0]
+        test_y_pred[current:current+X_batch.shape[0]] = y_pred
+        test_y_hum[current:current+X_batch.shape[0]] = y_hum
+        current += X_batch.shape[0]
+
+    test_acc = acc_fn(test_y_hum, test_y_pred)[0]
+    test_kp = quadratic_weighted_kappa(test_y_hum, test_y_pred, n_classes)
+    print("Test accuracy: ", test_acc)
+    print("Test kappa: ", test_kp)
 
     progplot.save()
-    np.savez(os.path.join(path, model_file),
+    np.savez(os.path.join(path, weights_dump),
              *lasagne.layers.get_all_param_values(l_out))
 
 if __name__ == '__main__':

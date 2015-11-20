@@ -1,7 +1,8 @@
 import warnings
 import pickle
 import numpy as np
-from lasagne.layers import InputLayer, DenseLayer, NonlinearityLayer
+from lasagne.layers import InputLayer, DenseLayer, NonlinearityLayer,\
+    DropoutLayer
 from lasagne.layers import set_all_param_values
 try:
     from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
@@ -12,7 +13,7 @@ from lasagne.layers import Pool2DLayer as PoolLayer
 from lasagne.nonlinearities import softmax
 
 
-def vgg19(input_var=None, filename=None):
+def vgg19(input_var=None, filename=None, n_classes=1000, p=None):
     """Setup network structure for VGG19 and optionally load pretrained
     weights
 
@@ -23,6 +24,10 @@ def vgg19(input_var=None, filename=None):
         variable will be created.
     filename : Optional[str]
         if filename is not None, weights are loaded from filename
+    n_classes : Optional[int]
+        default 1000 for weights trained on ImageNet
+    p : float [0,1] (default: 'None')
+        if p is not none, we use dropout layers with probability p
 
     Returns
     -------
@@ -65,8 +70,18 @@ def vgg19(input_var=None, filename=None):
     net['conv5_4'] = ConvLayer(net['conv5_3'], 512, 3, pad=1)
     net['pool5'] = PoolLayer(net['conv5_4'], 2)
     net['fc6'] = DenseLayer(net['pool5'], num_units=4096)
-    net['fc7'] = DenseLayer(net['fc6'], num_units=4096)
-    net['fc8'] = DenseLayer(net['fc7'], num_units=1000, nonlinearity=None)
+
+    if p is None:
+        net['fc7'] = DenseLayer(net['fc6'], num_units=4096)
+        net['fc8'] = DenseLayer(net['fc7'], num_units=n_classes,
+                                nonlinearity=None)
+
+    else:
+        net['dropout1'] = DropoutLayer(net['fc6'], p=p)
+        net['fc7'] = DenseLayer(net['dropout1'], num_units=4096)
+        net['dropout2'] = DropoutLayer(net['fc7'], p=p)
+        net['fc8'] = DenseLayer(net['dropout2'], num_units=n_classes,
+                                nonlinearity=None)
     net['prob'] = NonlinearityLayer(net['fc8'], softmax)
 
     if filename is not None:

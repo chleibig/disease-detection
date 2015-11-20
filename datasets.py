@@ -80,17 +80,23 @@ class Dataset(object):
 
         return train_indices, val_indices, test_indices
 
-    def train_test_split(self, test_frac, shuffle=False):
+    def train_test_split(self, test_size=0.1, train_size=None):
         """Return a single split into training and test data
-           Both splits have approximately the same relative class frequencies
+           Both parts have approximately the same relative class frequencies
 
         Parameters
         ----------
-        test_frac : float [0,1]
-            fraction of data used for testing, 1 - test_frac is used for
-            training
-        shuffle : boolean (False by default)
-            shuffle indices
+        test_size : float (default 0.1), int, or None
+            If float, should be between 0.0 and 1.0 and represent the
+            proportion of the dataset to include in the test split. If
+            int, represents the absolute number of test samples. If None,
+            the value is automatically set to the complement of the train size.
+
+        train_size : float, int, or None (default is None)
+            If float, should be between 0.0 and 1.0 and represent the
+            proportion of the dataset to include in the train split. If
+            int, represents the absolute number of train samples. If None,
+            the value is automatically set to the complement of the test size.
 
         Returns
         -------
@@ -98,8 +104,10 @@ class Dataset(object):
 
         """
 
-        return next(skcv.StratifiedKFold(self.y, n_folds=1/test_frac,
-                                         shuffle=shuffle).__iter__())
+        return next(skcv.StratifiedShuffleSplit(self.y, n_iter=1,
+                                                test_size=test_size,
+                                                train_size=train_size)
+                    .__iter__())
 
     def iterate_minibatches(self, indices, batch_size, shuffle=False):
         """
