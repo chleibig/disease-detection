@@ -73,8 +73,7 @@ def main(config_file):
     batch_size = config['batch_size']
     n_epoch = config['n_epoch']
     learning_rate = config['learning_rate']
-    train_size = config['train_size'] # will be used once
-    # StratifiedShuffleSplit is used as implementation of train_test_split
+    train_size = config['train_size']
     val_size = config['val_size']
     test_size = config['test_size']
     weights_init = config['weights_init']
@@ -150,11 +149,10 @@ def main(config_file):
     # Function to compute val loss and accuracy
     test_fn = theano.function([X, y], [test_loss, test_labels])
 
-    idx_train, idx_val = kdr.train_test_split(val_size, shuffle=True)
+    idx_train, idx_val = kdr.train_test_split(test_size=val_size,
+                                              train_size=train_size)
     idx_test = np.arange(min(test_size*kdr_test.n_samples,
                              kdr_test.n_samples), dtype=np.int32)
-    # idx_train, idx_val, _ = kdr.generate_indices(train_size, val_size,
-    #                                              test_size)
 
     ###########################################################################
     # Setup progression plot
