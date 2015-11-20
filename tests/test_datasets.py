@@ -1,22 +1,41 @@
 from __future__ import division
 import pytest
 import numpy as np
+import datasets
+
+
+class SimpleDataset(datasets.Dataset):
+    def __init__(self, y):
+        self._y = y
+        self._n_samples = len(y)
+
+    @property
+    def n_samples(self):
+        return self._n_samples
+
+    @property
+    def y(self):
+        return self._y
+
+    def load_batch(self, indices):
+        pass
 
 
 @pytest.fixture
 def dataset():
-    import datasets
-    return datasets.KaggleDR(
-        filename_targets='/home/cl/Downloads/data_kaggle_dr/trainLabels.csv')
+    n_samples = 1000
+    rel_freq = [0.73, 0.07, 0.15, 0.03, 0.02]
+    y = np.concatenate([np.ones(rf*n_samples, dtype=np.int32)*i for i, rf in
+                        enumerate(rel_freq)])
+    np.random.shuffle(y)
+    return SimpleDataset(y)
 
 
 def test_train_test_split(dataset):
 
-    test_sizes = [0.01, 0.1]
-    train_sizes = [0.02, None]
-
-    for test_size, train_size in zip(test_sizes, train_sizes):
-        idx_train, idx_test = dataset.train_test_split(test_size,
+        test_size = 0.1
+        train_size = None
+        idx_train, idx_test = dataset.train_test_split(test_size=test_size,
                                                        train_size=train_size)
         if train_size is None:
             train_size = 1 - test_size
