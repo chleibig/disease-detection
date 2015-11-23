@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 from lasagne.layers import DenseLayer, NonlinearityLayer
 from lasagne.nonlinearities import softmax
+from lasagne.regularization import regularize_network_params, l2
 
 import click
 from util import Progplot
@@ -80,6 +81,7 @@ def main(config_file):
     labels_train = config['labels_train']
     labels_test = config['labels_test']
     n_classes = config['n_classes']
+    l2_lambda = config['l2_lambda']
     val_priors = np.array(config['val_priors'], dtype=theano.config.floatX)
     test_priors = np.array(config['test_priors'], dtype=theano.config.floatX)
     assert len(val_priors) == len(test_priors) == n_classes, \
@@ -94,7 +96,7 @@ def main(config_file):
     # Initialize DAOs (data access objects)
     kdr = KaggleDR(path_data=os.path.join(path, "train"),
                    filename_targets=os.path.join(path, labels_train))
-    kdr_test = KaggleDR(path_data=os.path.join(path, "test"),
+    kdr_test = KaggleDR(path_data=os.path.join(path, "test_224"),
                         filename_targets=os.path.join(path, labels_test))
 
     network = models.vgg19(input_var=X,
@@ -110,6 +112,9 @@ def main(config_file):
     train_posteriors = lasagne.layers.get_output(l_out)
     loss = lasagne.objectives.categorical_crossentropy(train_posteriors, y)
     loss = loss.mean()
+    # Introducing regularization
+    reg = l2_lambda * regularize_network_params(l_out, l2)
+    loss += reg
 
     params = lasagne.layers.get_all_params(l_out, trainable=True)
 
