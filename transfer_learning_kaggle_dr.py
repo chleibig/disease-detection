@@ -96,7 +96,7 @@ def main(config_file):
     # Initialize DAOs (data access objects)
     kdr = KaggleDR(path_data=os.path.join(path, "train"),
                    filename_targets=os.path.join(path, labels_train))
-    kdr_test = KaggleDR(path_data=os.path.join(path, "test_224"),
+    kdr_test = KaggleDR(path_data=os.path.join(path, "test"),
                         filename_targets=os.path.join(path, labels_test))
 
     network = models.vgg19(input_var=X,
@@ -154,7 +154,8 @@ def main(config_file):
     test_fn = theano.function([X, y], [test_loss, test_labels])
 
     idx_train, idx_val = kdr.train_test_split(test_size=val_size,
-                                              train_size=train_size)
+                                              train_size=train_size,
+                                              deterministic=True)
     idx_test = np.arange(min(test_size*kdr_test.n_samples,
                              kdr_test.n_samples), dtype=np.int32)
 
