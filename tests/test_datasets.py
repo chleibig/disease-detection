@@ -36,7 +36,8 @@ class TestDataset:
             train_size = None
             idx_train, idx_test = dataset.train_test_split(
                                                          test_size=test_size,
-                                                         train_size=train_size)
+                                                         train_size=train_size,
+                                                         deterministic=True)
             if train_size is None:
                 train_size = 1 - test_size
             assert abs(len(idx_train) - train_size*dataset.n_samples) < 3
@@ -50,8 +51,13 @@ class TestDataset:
                                        for c_k in classes])/len(idx_train)
             rel_freq_test = np.array([np.count_nonzero(y[idx_test] == c_k)
                                       for c_k in classes])/len(idx_test)
-            np.testing.assert_almost_equal(rel_freq, rel_freq_train, decimal=3)
+            np.testing.assert_almost_equal(rel_freq, rel_freq_train,
+                                           decimal=3)
             np.testing.assert_almost_equal(rel_freq, rel_freq_test, decimal=3)
 
-
-
+            test_idx_train, test_idx_test = dataset.train_test_split(
+                                                           test_size=test_size,
+                                                         train_size=train_size,
+                                                         deterministic=True)
+            np.testing.assert_array_equal(idx_train, test_idx_train)
+            np.testing.assert_array_equal(idx_test, test_idx_test)
