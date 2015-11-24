@@ -2,6 +2,7 @@ from __future__ import print_function, division
 from lasagne.layers import DenseLayer, NonlinearityLayer
 from lasagne.nonlinearities import softmax
 from lasagne.regularization import regularize_network_params, l2
+import tests.ref_quadratic_weighted_kappa as ref_kappa
 
 import click
 from util import Progplot
@@ -218,8 +219,11 @@ def main(config_file):
 
         val_acc = acc_fn(val_y_hum, val_y_pred)[0]
         val_kp = quadratic_weighted_kappa(val_y_hum, val_y_pred, n_classes)
+        conf_matrix_val = ref_kappa.confusion_matrix(val_y_hum, val_y_pred,
+                                                     0, 4)
         print("Validation accuracy: ", val_acc)
         print("Validation kappa: ", val_kp)
+        print("Confusion matrix:", conf_matrix_val)
         progplot.add(values=[("train loss", np.mean(train_loss)),
                              ("val. loss", np.mean(val_loss)),
                              ("val. accuracy", val_acc),
@@ -257,8 +261,10 @@ def main(config_file):
 
     test_acc = acc_fn(test_y_hum, test_y_pred)[0]
     test_kp = quadratic_weighted_kappa(test_y_hum, test_y_pred, n_classes)
+    conf_matrix = ref_kappa.confusion_matrix(test_y_hum, test_y_pred, 0, 4)
     print("Test accuracy: ", test_acc)
     print("Test kappa: ", test_kp)
+    print ("Confusion matrix:", conf_matrix)
 
     progplot.save()
     np.savez(os.path.join(path, weights_dump),
