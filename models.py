@@ -169,7 +169,7 @@ def vgg19_fc8_to_prob(input_var=None, filename=None,
 
 
 def jeffrey_df(input_var=None, width=512, height=512,
-               filename=None, n_classes=5):
+               filename=None, n_classes=5, batch_size=None):
     """Setup network structure for JeffreyDF's network and optionally load
     pretrained weights
 
@@ -207,7 +207,8 @@ def jeffrey_df(input_var=None, width=512, height=512,
 
     net = {}
 
-    net['0'] = InputLayer((None, 3, width, height), input_var=input_var)
+    net['0'] = InputLayer((batch_size, 3, width, height), input_var=input_var,
+                          name='images')
     net['1'] = ConvLayer(net['0'], 32, 7, stride=(2, 2), pad='same',
                          untie_biases=True,
                          nonlinearity=LeakyRectify(leakiness=0.5),
@@ -277,23 +278,27 @@ def jeffrey_df(input_var=None, width=512, height=512,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
-    net['18'] = MaxPool2DDNNLayer(net['17'], 3, stride=(2, 2))
+    net['18'] = MaxPool2DDNNLayer(net['17'], 3, stride=(2, 2),
+                                  name='coarse_last_pool')
     net['19'] = DropoutLayer(net['18'], p=0.5)
     net['20'] = DenseLayer(net['19'], num_units=1024, nonlinearity=None,
                            W=lasagne.init.Orthogonal(1.0),
-                           b=lasagne.init.Constant(0.1))
+                           b=lasagne.init.Constant(0.1),
+                           name='first_fc_0')
     net['21'] = FeaturePoolLayer(net['20'], 2)
-    net['22'] = InputLayer((None, 2))
+    net['22'] = InputLayer((batch_size, 2), name='imgdim')
     net['23'] = ConcatLayer([net['21'], net['22']])
     #Combine representations of both eyes
     net['24'] = ReshapeLayer(net['23'], (-1, net['23'].output_shape[1]*2))
     net['25'] = DropoutLayer(net['24'], p=0.5)
     net['26'] = DenseLayer(net['25'], num_units=1024, nonlinearity=None,
                            W=lasagne.init.Orthogonal(1.0),
-                           b=lasagne.init.Constant(0.1))
+                           b=lasagne.init.Constant(0.1),
+                           name='combine_repr_fc')
     net['27'] = FeaturePoolLayer(net['26'], 2)
     net['28'] = DropoutLayer(net['27'], p=0.5)
     net['29'] = DenseLayer(net['28'],
+
                            num_units=n_classes * 2,
                            nonlinearity=None,
                            W=lasagne.init.Orthogonal(1.0),
