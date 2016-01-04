@@ -1,13 +1,11 @@
 from __future__ import division
 import pytest
 import numpy as np
-
+import datasets
 
 class TestDataset:
     @pytest.fixture
     def dataset(self):
-        import datasets
-
         class SimpleDataset(datasets.Dataset):
             def __init__(self, y):
                 self._y = y
@@ -61,3 +59,14 @@ class TestDataset:
                                                          deterministic=True)
             np.testing.assert_array_equal(idx_train, test_idx_train)
             np.testing.assert_array_equal(idx_test, test_idx_test)
+
+
+class TestOptRetina:
+    def test_build_unique_filenames(self):
+        import pandas as pd
+        labels = pd.read_csv('tests/ref_data/OR/sampleLabels.csv', dtype={
+            'level': np.int32})
+        unique_filenames = datasets.OptRetina.build_unique_filenames(labels)
+        assert unique_filenames[0] == '21/linked/anonymized_3558.jpg'
+
+

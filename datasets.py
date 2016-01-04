@@ -283,3 +283,31 @@ class KaggleDR(Dataset):
         self.X = np.array([self.prepare_image(self.load_image(fn)) for fn in
                            self.image_filenames[indices]])
         self.indices_in_X = indices
+
+
+class OptRetina(object):
+
+    def __init__(self, path_data=None, filename_targets=None):
+        self.path_data = path_data
+        self.filename_targets = filename_targets
+        labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
+        self.image_filenames = OptRetina.build_unique_filenames(labels)
+        # we store all labels
+        self._y = np.array(labels['diseased'])
+        self._n_samples = len(self.y)
+        # we might cache some data later on
+        self.X = None
+        # because self.X might be a subset of the entire data set, we track
+        # wich samples we have cached
+        self.indices_in_X = None
+
+    @staticmethod
+    def build_unique_filenames(labels):
+        centre_ids = labels.centre_id.values.astype(str)
+        n_images = len(labels)
+        image_filenames = labels.filename.values
+
+        filenames = [''.join(parts) for parts in
+                     zip(centre_ids, ['/linked/']*n_images, image_filenames)]
+
+        return filenames
