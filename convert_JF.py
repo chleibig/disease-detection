@@ -55,24 +55,6 @@ def convert(fname, crop_size):
 
     return converted
 
-
-def square_bbox(img):
-    w, h = img.size
-    left = max((w - h) // 2, 0)
-    upper = 0
-    right = min(w - (w - h) // 2, w)
-    lower = h
-    return left, upper, right, lower
-
-
-def convert_square(fname, crop_size):
-    img = Image.open(fname)
-    bbox = square_bbox(img)
-    cropped = img.crop(bbox)
-    resized = cropped.resize([crop_size, crop_size])
-    return resized
-
-
 def get_convert_fname(fname, extension, directory, convert_directory):
     source_extension = fname.split('.')[-1]
     return fname.replace(source_extension, extension).replace(directory,
