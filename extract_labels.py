@@ -85,6 +85,9 @@ EVALUABLE = {u'Auswertbar', u'Completamente evaluable', u'Evaluable for',
 # we apply some heuristics in order to avoid label noise
 n_images_for_case = il.caso_id.value_counts()
 CASES_WITH_TWO_IMAGES = n_images_for_case.index[n_images_for_case.values == 2]
+# exclude caso_ids for which non FUNDUS images were observed
+UNWANTED_CASES = {4545, 4546, 11023, 14167}
+
 
 row_selection = (
                   (il.centro_id_x.astype(int).values ==
@@ -93,7 +96,8 @@ row_selection = (
                   (il.calidad_retinografia_oi.isin(EVALUABLE).values) &
                   (il.signos_rpd_od.values ==  il.signos_rpd_oi.values) &
                   (il.signos_dmae_od.values == il.signos_dmae_oi.values) &
-                  (il.caso_id.isin(CASES_WITH_TWO_IMAGES).values)
+                  (il.caso_id.isin(CASES_WITH_TWO_IMAGES).values) &
+                  (~il.caso_id.isin(UNWANTED_CASES).values)
                 )
 
 col_selection = ['nombre_foto', 'centro_id_x', 'caso_id', 'diseased']
