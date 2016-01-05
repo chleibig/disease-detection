@@ -20,6 +20,9 @@ import click
 import numpy as np
 from PIL import Image
 
+import pandas as pd
+from datasets import OptRetina
+
 
 def convert(fname, crop_size):
     """Refactored from JF's generators.load_image_and_process"""
@@ -71,9 +74,16 @@ def convert_square(fname, crop_size):
 
 
 def get_convert_fname(fname, extension, directory, convert_directory):
-    return fname.replace('jpeg', extension).replace(directory, 
+    source_extension = fname.split('.')[-1]
+    return fname.replace(source_extension, extension).replace(directory,
                                                     convert_directory)
 
+def create_dirs(paths):
+    for p in paths:
+        try:
+            os.makedirs(p)
+        except OSError:
+            pass
 
 def process(args):
     fun, arg = args
@@ -95,13 +105,17 @@ def save(img, fname):
 @click.option('--convert_directory', default='data/train_res',
               show_default=True,
               help="Where to save converted images.")
+@click.option('--filename_parts_or', default=None,
+              help="csv file with columns 'filename' and 'centre_id' "
+                   "describing the tree of OptRetina data.")
 @click.option('--crop_size', default=256, show_default=True,
               help="Size of converted images.")
 @click.option('--extension', default='tiff', show_default=True,
               help="Filetype of converted images.")
 @click.option('--n_proc', default=2, show_default=True,
               help="Number of processes for parallelization.")
-def main(directory, convert_directory, crop_size, extension, n_proc):
+def main(directory, convert_directory, filename_parts_or, crop_size,
+         extension, n_proc):
     """Image preprocessing according to Jeffrey de Fauw:
        Crop and resize images, save with desired extension.
     """
@@ -111,15 +125,24 @@ def main(directory, convert_directory, crop_size, extension, n_proc):
     except OSError:
         pass
 
-    filenames = [os.path.join(dp, f) for dp, dn, fn in os.walk(directory)
-                 for f in fn if f.endswith('jpeg') or f.endswith('tiff')] 
-    filenames = sorted(filenames)
+    if filename_parts_or is not None:
+        df = pd.read_csv(filename_parts_or)
+        unique_filenames = OptRetina.build_unique_filenames(df)
+        filenames = [os.path.join(directory, fn) for fn in unique_filenames]
+        sub_dirs = df.centre_id.unique().astype(str)
+        convert_dirs = [os.path.join(convert_directory, sd, 'linked')
+                        for sd in sub_dirs]
+        create_dirs(convert_dirs)
+    else:
+        filenames = [os.path.join(dp, f) for dp, dn, fn in os.walk(directory)
+                     for f in fn if f.endswith('jpeg') or f.endswith('tiff')]
+
+    assert filenames, "No valid filenames."
 
     print("Resizing images in {} to {}, this takes a while."
           "".format(directory, convert_directory))
 
     n = len(filenames)
-    # process in batches, sometimes weird things happen with Pool on my machine
     batchsize = 500
     batches = n // batchsize + 1
     pool = Pool(n_proc)
