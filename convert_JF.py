@@ -28,6 +28,9 @@ def convert(fname, crop_size):
     """Refactored from JF's generators.load_image_and_process"""
     im = Image.open(fname, mode='r')
 
+    assert len(np.shape(im)) == 3, "Shape of image {} unexpected, " \
+                                       "maybe it's grayscale".format(fname)
+
     w, h = im.size
 
     if w / float(h) >= 1.3:

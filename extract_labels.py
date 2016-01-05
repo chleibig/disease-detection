@@ -86,7 +86,7 @@ EVALUABLE = {u'Auswertbar', u'Completamente evaluable', u'Evaluable for',
 n_images_for_case = il.caso_id.value_counts()
 CASES_WITH_TWO_IMAGES = n_images_for_case.index[n_images_for_case.values == 2]
 # exclude caso_ids for which non FUNDUS images were observed
-UNWANTED_CASES = {4545, 4546, 11023, 14167}
+UNWANTED_CASES = {4545, 4546, 11023, 14167, 22670}
 
 
 row_selection = (
