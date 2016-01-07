@@ -365,7 +365,9 @@ class OptRetina(Dataset):
 
     def load_image(self, filename):
         filename = self.build_absolute_filename(filename)
-        return np.array(Image.open(filename))
+        image = np.array(Image.open(filename))
+        assert len(image.shape) == 3, 'Suspicious image ' + filename
+        return image
 
     def build_absolute_filename(self, filename):
         return os.path.join(self.path_data, filename + self.extension)

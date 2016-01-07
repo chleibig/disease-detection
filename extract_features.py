@@ -7,80 +7,64 @@ Christian Leibig, 2015
 
 """
 from __future__ import division, print_function
-import time
 
 import click
 import numpy as np
 
 
 @click.command()
-@click.option('--source', help="Either a *.npy array (assumed to have "
-                               "standard normal colour channels) or a "
-                               "directory with "
-                               "images (standard normalization of colour "
-                               "channels is applied).")
-@click.option('--filename_targets', default=None, show_default=True,
-              help="Absolute filename of labels .csv file")
+@click.argument('path_to_images')
+@click.argument('csv_file_with_filenames')
 @click.option('--batch_size', default=2, show_default=True,
               help="Number of samples to be passed through the network at "
                    "once.")
-@click.option('--outfile', default='feature_activations.npy',
+@click.option('--outfile', default='feat_act_JFnet_LAST_LAYER_.npy',
               show_default=True,
               help="Filename for saving the extracted features.")
-@click.option('--last_layer', default='fc7', show_default=True,
-              help="Layer up to which features shall be computed.")
-def main(source, filename_targets, batch_size, outfile, last_layer):
+def main(path_to_images, csv_file_with_filenames, batch_size, outfile):
     """Perform forward pass through network and save extracted features"""
     import theano
     import theano.tensor as T
     import lasagne
 
     import models
-    from datasets import KaggleDR
+    from datasets import OptRetina
 
     input_var = T.tensor4('inputs')
-    network = models.vgg19(batch_size=batch_size, input_var=input_var,
-                           filename='vgg19.pkl')
+    weights = '/home/cl/Downloads/kdr_solutions/JeffreyDF/' \
+              'kaggle_diabetic_retinopathy/dumps/' \
+              '2015_07_17_123003_PARAMSDUMP.pkl'
+    network = models.jeffrey_df(input_var=input_var, width=512, height=512,
+                                filename=weights)
+    last_layer = '21'
     output_layer = network[last_layer]
 
     feature_activations = lasagne.layers.get_output(output_layer)
     forward_pass = theano.function([input_var], feature_activations)
 
-    if source.endswith('.npy'):
-        kdr = KaggleDR(filename_targets=filename_targets)
-        idx = np.arange(kdr.n_samples)
-        # Assign member variable of kdr with indices and data
-        kdr.indices_in_X = idx
-        n_channels, n_rows, n_columns = network['input'].shape[1:]
-        kdr.X = np.memmap(source, dtype=theano.config.floatX, mode='r',
-                          shape=(kdr.n_samples, n_channels, n_rows, n_columns))
-    else:
-        kdr = KaggleDR(path_data=source, filename_targets=filename_targets)
-        idx = np.arange(kdr.n_samples)
-        # No assignment of kdr.X and kdr.indices_in_X results in loading images
-        # from disk
+    dataset = OptRetina(path_data=path_to_images,
+                        filename_targets=csv_file_with_filenames)
+    idx = np.arange(dataset.n_samples)
 
-    outputs = np.empty((kdr.n_samples, output_layer.num_units))
-    i = 0
-    n_batches = np.ceil(kdr.n_samples/batch_size)
-    print("Computing features of", kdr.n_samples, "sample(s)...")
-    start_time = time.time()
-    for batch in kdr.iterate_minibatches(idx, batch_size):
-            print("Working on batch {}/{}".format(i, n_batches))
-            inputs, _ = batch
-            outputs[i*batch_size:min((i+1)*batch_size, kdr.n_samples)] = \
-                forward_pass(inputs)
-            i += 1
+    n_features = output_layer.output_shape[1]
+    assert n_features == 512
+    outputs = np.empty((dataset.n_samples, n_features))
+    n_batches = np.ceil(dataset.n_samples/batch_size)
 
-    if source.endswith('.npy'):
-        del kdr.X  # close memory mapped array
+    with click.progressbar(dataset.iterate_minibatches(idx, batch_size),
+                           label='Forward pass of '+ str(dataset.n_samples)
+                                   +' images through network',
+                           length=n_batches) as batch_iterator:
+        for i, batch in enumerate(batch_iterator):
+                inputs, _ = batch
+                outputs[i*batch_size:min((i+1)*batch_size,
+                        dataset.n_samples)] = forward_pass(inputs)
 
-    print("Forward pass of", kdr.n_samples, "took",
-          np.round((time.time() - start_time), 3), "sec.")
-    print("Writing features to disk...")
+    print("Writing extracted features to disk...")
+    if outfile == 'feat_act_JFnet_LAST_LAYER_.npy':
+        outfile = ''.join(['feat_act_JFnet_', last_layer, '_.npy'])
     np.save(outfile, outputs)
     print("Done.")
-
 
 if __name__ == '__main__':
     main()
