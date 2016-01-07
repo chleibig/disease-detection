@@ -34,9 +34,10 @@ prob = network['31']
 path = '/home/cl/Downloads/data_kaggle_dr'
 batch_size = 2
 n_epoch = 1
-fn_labels = 'trainLabels_partial.csv'
+# fn_labels = 'trainLabels_partial.csv'
+fn_labels = 'o_O/retinopathy_solution.csv'
 
-kdr = KaggleDR(path_data=os.path.join(path, 'train_partial_JF_512'),
+kdr = KaggleDR(path_data=os.path.join(path, 'o_O/test_512'),
                filename_targets=os.path.join(path, fn_labels))
 
 output = lasagne.layers.get_output(prob, deterministic=True)
