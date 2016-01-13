@@ -20,6 +20,7 @@ nb_classes = 2
 batch_size = 32
 nb_epochs = 500
 patience = 20
+class_weight = {0:1, 1:4.852051234453}
 
 path = '/home/cl/Downloads/OR'
 feat_file = 'feat_act_JFnet_21_.npy'
@@ -80,8 +81,8 @@ if patience:
 
 
 model.fit(X_train, Y_train, nb_epoch=nb_epochs, batch_size=batch_size,
-          validation_split=0.1, show_accuracy=True, verbose=1,
-          callbacks=callbacks)
+          class_weight=class_weight, validation_split=0.1,
+          show_accuracy=True, verbose=1, callbacks=callbacks)
 
 # todo: dump model
 
