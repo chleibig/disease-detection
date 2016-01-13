@@ -16,6 +16,9 @@ import plotting
 
 plotting.allow_plot()
 
+import seaborn as sns
+sns.set_context("notebook", font_scale=1.5, rc={"lines.linewidth": 2.5})
+
 nb_classes = 2
 batch_size = 32
 nb_epochs = 500
