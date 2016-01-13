@@ -92,32 +92,19 @@ from sklearn.metrics import confusion_matrix
 y_pred = model.predict_classes(X_test)
 cm = confusion_matrix(y_test, y_pred)
 
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, auc
 posteriors = model.predict_proba(X_test)
 HEALTHY, DISEASED = 0, 1
-f_healthy_r, t_healthy_r, thresholds = roc_curve(y_test,
-                                                 posteriors[:, HEALTHY],
-                                                 pos_label=HEALTHY)
-
 f_diseased_r, t_diseased_r, thresholds = roc_curve(y_test,
-                                                 posteriors[:, DISEASED],
-                                                 pos_label=DISEASED)
+                                                   posteriors[:, DISEASED],
+                                                   pos_label=DISEASED)
+roc_auc = auc(f_diseased_r, t_diseased_r)
 
 import matplotlib.pyplot as plt
 
 plt.figure()
-plt.plot(f_healthy_r, t_healthy_r)
-plt.plot([0, 1], [0, 1], 'k--')
-plt.xlim([0.0, 1.0])
-plt.ylim([0.0, 1.05])
-plt.xlabel('False Healthy Rate')
-plt.ylabel('True Healthy Rate')
-plt.title('Receiver operating characteristic')
-plt.legend(loc="lower right")
-plt.show()
-
-plt.figure()
-plt.plot(f_diseased_r, t_diseased_r)
+plt.plot(f_diseased_r, t_diseased_r,
+         label='ROC curve (area = %0.2f)' % roc_auc)
 plt.plot([0, 1], [0, 1], 'k--')
 plt.xlim([0.0, 1.0])
 plt.ylim([0.0, 1.05])
