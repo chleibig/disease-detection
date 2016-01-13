@@ -3,6 +3,36 @@ import pytest
 import numpy as np
 import datasets
 
+def assert_batches_are_stratified(y, batch_size=32,
+                                  shuffle=True, decimal=1):
+    """Assert that batches obtained by slicing y into chunks of length
+       batch_size are stratified, i.e. have the same relative class
+       frequencies as y."""
+
+    if shuffle:
+        np.random.shuffle(y)
+
+    step = batch_size / float(len(y))
+    fractions = np.arange(step, 1, step)
+    classes = np.unique(y)
+
+    err_msg = "Try to increase the batch_size."
+
+    for fraction in fractions:
+        split_at = int(fraction*len(y))
+        y_left = y[:split_at]
+        y_right = y[split_at:]
+        p_k = np.array([np.count_nonzero(y == c_k) for c_k in
+                             classes])/len(y)
+        p_k_left = np.array([np.count_nonzero(y_left == c_k) for c_k in
+                             classes])/len(y_left)
+        p_k_right = np.array([np.count_nonzero(y_right == c_k) for c_k in
+                             classes])/len(y_right)
+        np.testing.assert_almost_equal(p_k, p_k_left, decimal=decimal,
+                                       err_msg=err_msg)
+        np.testing.assert_almost_equal(p_k, p_k_right, decimal=decimal,
+                                       err_msg=err_msg)
+
 class TestDataset:
     @pytest.fixture
     def dataset(self):
