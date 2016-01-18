@@ -1,6 +1,7 @@
 from __future__ import division
 import numpy as np
 import bokeh.plotting as bp
+import plotting
 import seaborn as sns
 import keras
 from keras import backend as K
@@ -113,6 +114,31 @@ class Progplot(object):
         """
         self.update(self.seen_so_far, values)
         self.seen_so_far += 1
+
+
+class TrainingMonitor(keras.callbacks.Callback):
+    """Monitor loss and accuracy dynamically for training and validation
+    data
+
+    To be used together with keras as documented under
+       http://keras.io/callbacks/
+
+    """
+    def __init__(self, history):
+        super(TrainingMonitor, self).__init__()
+        self.loss_plot = plotting.LossPlot(1)
+        self.acc_plot = plotting.AccuracyPlot(2)
+        self.history = history
+
+    def on_epoch_end(self, epoch, logs={}):
+        train_loss = self.history.history['loss'][-1]
+        val_loss = self.history.history['val_loss'][-1]
+
+        train_acc = self.history.history['acc'][-1]
+        val_acc = self.history.history['val_acc'][-1]
+
+        self.loss_plot.plot(train_loss, val_loss, epoch)
+        self.acc_plot.plot(train_acc, val_acc, epoch)
 
 
 class AdaptiveLearningRateScheduler(keras.callbacks.Callback):
