@@ -12,9 +12,7 @@ from keras.optimizers import SGD
 from keras.utils import np_utils
 import keras.callbacks
 
-from tests.test_datasets import assert_batches_are_stratified
 import plotting
-
 plotting.allow_plot()
 
 import seaborn as sns
@@ -38,11 +36,6 @@ nb_samples, nb_features = X.shape
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1,
                                                     stratify=y)
-
-assert_batches_are_stratified(y_train, batch_size=batch_size, shuffle=True,
-                              decimal=1)
-assert_batches_are_stratified(y_test, batch_size=batch_size, shuffle=False,
-                              decimal=1)
 
 Y_train = np_utils.to_categorical(y_train, nb_classes)
 Y_test = np_utils.to_categorical(y_test, nb_classes)
