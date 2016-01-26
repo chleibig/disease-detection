@@ -8,6 +8,8 @@ FIGURE_TITLE_FONT_SIZE = 16
 
 def allow_plot():
     plt.ion()
+def close_all():
+    plt.close('all')
 
 
 class LossPlot(object):
