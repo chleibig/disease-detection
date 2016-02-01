@@ -1,7 +1,10 @@
 from __future__ import division
 import numpy as np
 import bokeh.plotting as bp
+import plotting
 import seaborn as sns
+import keras.callbacks
+from keras import backend as K
 
 
 def quadratic_weighted_kappa(labels_rater_1, labels_rater_2, num_classes):
@@ -111,3 +114,67 @@ class Progplot(object):
         """
         self.update(self.seen_so_far, values)
         self.seen_so_far += 1
+
+
+class TrainingMonitor(keras.callbacks.Callback):
+    """Monitor loss and accuracy dynamically for training and validation
+    data
+
+    To be used together with keras as documented under
+       http://keras.io/callbacks/
+
+    """
+    def __init__(self, history):
+        super(TrainingMonitor, self).__init__()
+        self.loss_plot = plotting.LossPlot(1)
+        self.acc_plot = plotting.AccuracyPlot(2)
+        self.history = history
+
+    def on_epoch_end(self, epoch, logs={}):
+        train_loss = self.history.history['loss'][-1]
+        val_loss = self.history.history['val_loss'][-1]
+
+        train_acc = self.history.history['acc'][-1]
+        val_acc = self.history.history['val_acc'][-1]
+
+        self.loss_plot.plot(train_loss, val_loss, epoch)
+        self.acc_plot.plot(train_acc, val_acc, epoch)
+
+
+class AdaptiveLearningRateScheduler(keras.callbacks.Callback):
+    """Learning rate scheduler that decays learning rate by a step if
+       validation loss stops improving.
+
+       To be used together with keras as documented under
+       http://keras.io/callbacks/
+    """
+
+    def __init__(self, initial_lr=0.1, decay=0.1, patience=20, verbose=0):
+        super(AdaptiveLearningRateScheduler, self).__init__()
+        assert type(initial_lr) == float, \
+                    'The learning rate should be float.'
+        self.lr = initial_lr
+        self.decay = decay
+        self.patience = patience
+        self.verbose = verbose
+        self.best = np.Inf
+        self.wait = 0
+
+    def on_epoch_begin(self, epoch, logs={}):
+        assert hasattr(self.model.optimizer, 'lr'), \
+            'Optimizer must have a "lr" attribute.'
+
+        current = logs.get('val_loss')
+        if np.less(current, self.best):
+            self.best = current
+            self.wait = 0
+        else:
+            if self.wait <= self.patience:
+                self.wait += 1
+            else:
+                self.lr *= self.decay
+                K.set_value(self.model.optimizer.lr, self.lr)
+                self.wait = 0
+                if self.verbose > 0:
+                    print('Epoch {}: lower learning rate to {}'
+                          .format(epoch, self.lr))

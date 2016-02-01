@@ -1,13 +1,12 @@
 from __future__ import division
 import pytest
 import numpy as np
+import datasets
 
 
 class TestDataset:
     @pytest.fixture
     def dataset(self):
-        import datasets
-
         class SimpleDataset(datasets.Dataset):
             def __init__(self, y):
                 self._y = y
@@ -61,3 +60,35 @@ class TestDataset:
                                                          deterministic=True)
             np.testing.assert_array_equal(idx_train, test_idx_train)
             np.testing.assert_array_equal(idx_test, test_idx_test)
+
+
+class TestOptRetina:
+    @pytest.fixture
+    def dataset(self):
+        dataset = datasets.OptRetina(
+                         path_data='tests/ref_data/OR/sample_JF_512',
+                         filename_targets='tests/ref_data/OR/sampleLabels.csv')
+        return dataset
+
+    def test_build_unique_filenames(self):
+        import pandas as pd
+        labels = pd.read_csv('tests/ref_data/OR/sampleLabels.csv', dtype={
+            'level': np.int32})
+        unique_filenames = datasets.OptRetina.build_unique_filenames(labels)
+        assert unique_filenames[0] == '21/linked/anonymized_3558'
+
+    def test_build_absolute_filename(self, dataset):
+        abs_fn = 'tests/ref_data/OR/sample_JF_512/10/linked/anonymized_3566' \
+                 '.jpeg'
+        unique_fn = '10/linked/anonymized_3566'
+        assert abs_fn == dataset.build_absolute_filename(unique_fn)
+
+    def test_load_batch(self, dataset):
+        indices = [3, 4]
+        X, y = dataset.load_batch(indices)
+        assert len(X) == len(y) == len(indices)
+        assert X.shape == (len(indices), 3, 512, 512)
+
+
+
+
