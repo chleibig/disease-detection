@@ -3,7 +3,7 @@ import numpy as np
 import bokeh.plotting as bp
 import plotting
 import seaborn as sns
-import keras
+import keras.callbacks
 from keras import backend as K
 
 
