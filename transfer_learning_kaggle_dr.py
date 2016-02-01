@@ -1,10 +1,11 @@
 from __future__ import print_function, division
 from lasagne.layers import DenseLayer, NonlinearityLayer
 from lasagne.nonlinearities import softmax
+from lasagne.regularization import regularize_network_params, l2
+import tests.ref_quadratic_weighted_kappa as ref_kappa
 
 import click
 from util import Progplot
-
 
 @click.command()
 @click.option('--config_file', default='config.json', show_default=True,
@@ -81,6 +82,7 @@ def main(config_file):
     labels_train = config['labels_train']
     labels_test = config['labels_test']
     n_classes = config['n_classes']
+    l2_lambda = config['l2_lambda']
     val_priors = np.array(config['val_priors'], dtype=theano.config.floatX)
     test_priors = np.array(config['test_priors'], dtype=theano.config.floatX)
     assert len(val_priors) == len(test_priors) == n_classes, \
@@ -111,6 +113,9 @@ def main(config_file):
     train_posteriors = lasagne.layers.get_output(l_out)
     loss = lasagne.objectives.categorical_crossentropy(train_posteriors, y)
     loss = loss.mean()
+    # Introducing regularization
+    reg = l2_lambda * regularize_network_params(l_out, l2)
+    loss += reg
 
     params = lasagne.layers.get_all_params(l_out, trainable=True)
 
@@ -150,7 +155,8 @@ def main(config_file):
     test_fn = theano.function([X, y], [test_loss, test_labels])
 
     idx_train, idx_val = kdr.train_test_split(test_size=val_size,
-                                              train_size=train_size)
+                                              train_size=train_size,
+                                              deterministic=True)
     idx_test = np.arange(min(test_size*kdr_test.n_samples,
                              kdr_test.n_samples), dtype=np.int32)
 
@@ -213,8 +219,11 @@ def main(config_file):
 
         val_acc = acc_fn(val_y_hum, val_y_pred)[0]
         val_kp = quadratic_weighted_kappa(val_y_hum, val_y_pred, n_classes)
+        conf_matrix_val = ref_kappa.confusion_matrix(val_y_hum, val_y_pred,
+                                                     0, 4)
         print("Validation accuracy: ", val_acc)
         print("Validation kappa: ", val_kp)
+        print("Confusion matrix:", conf_matrix_val)
         progplot.add(values=[("train loss", np.mean(train_loss)),
                              ("val. loss", np.mean(val_loss)),
                              ("val. accuracy", val_acc),
@@ -252,8 +261,10 @@ def main(config_file):
 
     test_acc = acc_fn(test_y_hum, test_y_pred)[0]
     test_kp = quadratic_weighted_kappa(test_y_hum, test_y_pred, n_classes)
+    conf_matrix = ref_kappa.confusion_matrix(test_y_hum, test_y_pred, 0, 4)
     print("Test accuracy: ", test_acc)
     print("Test kappa: ", test_kp)
+    print ("Confusion matrix:", conf_matrix)
 
     progplot.save()
     np.savez(os.path.join(path, weights_dump),

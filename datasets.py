@@ -80,7 +80,8 @@ class Dataset(object):
 
         return train_indices, val_indices, test_indices
 
-    def train_test_split(self, test_size=0.1, train_size=None):
+    def train_test_split(self, test_size=0.1, train_size=None,
+                         deterministic=True):
         """Return a single split into training and test data
            Both parts have approximately the same relative class frequencies
 
@@ -98,15 +99,22 @@ class Dataset(object):
             int, represents the absolute number of train samples. If None,
             the value is automatically set to the complement of the test size.
 
+        deterministic: Boolean
+
         Returns
         -------
         train_indices, test_indices : nd-arrays
 
         """
+        if deterministic:
+            seed = 1234
+        else:
+            seed = None
 
         return next(skcv.StratifiedShuffleSplit(self.y, n_iter=1,
                                                 test_size=test_size,
-                                                train_size=train_size)
+                                                train_size=train_size,
+                                                random_state=seed)
                     .__iter__())
 
     def iterate_minibatches(self, indices, batch_size, shuffle=False):
