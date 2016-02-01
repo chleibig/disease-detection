@@ -32,17 +32,17 @@ lr_decay = 0.5
 lr_patience = 30
 l2_lambda = 0.005
 undersample = False
-class_weight = {0:1, 1:4.852051234453}
-# class_weight = {0:1, 1:1}
+# class_weight = {0:1, 1:4.852051234453}
+class_weight = {0:1, 1:100}
 optimizer = keras.optimizers.RMSprop(lr=0.001, rho=0.9, epsilon=1e-06)
 # optimizer = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
 
-path = '/home/cl/Downloads/OR'
+path = '/home/cl/optretina/data'
 images = os.path.join(path, 'data_JF_512')
 feat_file = 'feat_act_JFnet_21_.npy'
 labels_file = 'OR_diseased_labels.csv'
 
-exclude_path = '/home/cl/Downloads/OR/data_JF_512_exclude'
+exclude_path = '/home/cl/optretina/data/data_JF_512_exclude'
 
 df = pd.read_csv(os.path.join(path, labels_file))
 
@@ -150,10 +150,10 @@ model.fit(X_train, Y_train, nb_epoch=nb_epochs, batch_size=batch_size,
 # todo: dump model
 
 from sklearn.metrics import confusion_matrix
-p_given_x = model.predict_proba(X_test)
-posteriors = np.r_[[p_given_x[:, k] * priors_train[k] for k in priors_train]].T
+# p_given_x = model.predict_proba(X_test)
+# posteriors = np.r_[[p_given_x[:, k] * priors_train[k] for k in priors_train]].T
+posteriors = model.predict_proba(X_test)
 df_test.loc[:,'pred'] = model.predict_classes(X_test)
-
 cm = confusion_matrix(y_test, df_test.pred)
 
 from sklearn.metrics import roc_curve, auc
