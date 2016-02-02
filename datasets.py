@@ -158,25 +158,6 @@ class KaggleDR(Dataset):
 
     """
 
-    # channel standard deviations (calculated by team o_O)
-    STD = np.array([70.53946096, 51.71475228, 43.03428563],
-                   dtype=theano.config.floatX)
-    # channel means (calculated by team o_O)
-    MEAN = np.array([108.64628601, 75.86886597, 54.34005737],
-                    dtype=theano.config.floatX)
-
-    @staticmethod
-    def jf_trafo(image):
-        """Apply Jeffrey de Fauw's transformation"""
-
-        #Recovered from model_dump['data_loader_params'].zmuv_mean
-        # and *.zmuv_std of 2015_07_17_123003.pkl in Jeffrey's repo:
-        ZMUV_MEAN = 0.04166667
-        ZMUV_STD = 0.20412415
-
-        image /= 255
-        return (image - ZMUV_MEAN) / (0.05 + ZMUV_STD)
-
     def __init__(self, path_data=None, filename_targets=None):
         self.path_data = path_data
         self.filename_targets = filename_targets
@@ -190,6 +171,46 @@ class KaggleDR(Dataset):
         # because self.X might be a subset of the entire data set, we track
         # wich samples we have cached
         self.indices_in_X = None
+
+    @staticmethod
+    def standard_normalize(image):
+        """Normalize image to have zero mean and unit variance.
+
+        Subtracts channel MEAN and divides by channel STD
+
+        Parameters
+        ----------
+        image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
+                                                           theano.config.floatX
+
+        Returns
+        -------
+        image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
+                                                           theano.config.floatX
+        """
+
+        # channel standard deviations (calculated by team o_O)
+        STD = np.array([70.53946096, 51.71475228, 43.03428563],
+                   dtype=theano.config.floatX)
+        # channel means (calculated by team o_O)
+        MEAN = np.array([108.64628601, 75.86886597, 54.34005737],
+                    dtype=theano.config.floatX)
+
+        return np.divide(np.subtract(image,
+                                     MEAN[:, np.newaxis, np.newaxis]),
+                                     STD[:, np.newaxis, np.newaxis])
+
+    @staticmethod
+    def jf_trafo(image):
+        """Apply Jeffrey de Fauw's transformation"""
+
+        #Recovered from model_dump['data_loader_params'].zmuv_mean
+        # and *.zmuv_std of 2015_07_17_123003.pkl in Jeffrey's repo:
+        ZMUV_MEAN = 0.04166667
+        ZMUV_STD = 0.20412415
+
+        image /= 255
+        return (image - ZMUV_MEAN) / (0.05 + ZMUV_STD)
 
     def load_image(self, filename):
         """
@@ -209,26 +230,7 @@ class KaggleDR(Dataset):
         filename = os.path.join(self.path_data, filename + '.jpeg')
         return np.array(Image.open(filename))
 
-    @staticmethod
-    def standard_normalize(image):
-        """Normalize image to have zero mean and unit variance.
 
-        Subtracts channel MEAN and divides by channel STD
-
-        Parameters
-        ----------
-        image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
-                                                           theano.config.floatX
-
-        Returns
-        -------
-        image : numpy array, shape = (n_colors, n_rows, n_columns), dtype =
-                                                           theano.config.floatX
-        """
-
-        return np.divide(np.subtract(image,
-                                     KaggleDR.MEAN[:, np.newaxis, np.newaxis]),
-                         KaggleDR.STD[:, np.newaxis, np.newaxis])
 
     @staticmethod
     def prepare_image(im):
