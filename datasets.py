@@ -165,6 +165,18 @@ class KaggleDR(Dataset):
     MEAN = np.array([108.64628601, 75.86886597, 54.34005737],
                     dtype=theano.config.floatX)
 
+    @staticmethod
+    def jf_trafo(image):
+        """Apply Jeffrey de Fauw's transformation"""
+
+        #Recovered from model_dump['data_loader_params'].zmuv_mean
+        # and *.zmuv_std of 2015_07_17_123003.pkl in Jeffrey's repo:
+        ZMUV_MEAN = 0.04166667
+        ZMUV_STD = 0.20412415
+
+        image /= 255
+        return (image - ZMUV_MEAN) / (0.05 + ZMUV_STD)
+
     def __init__(self, path_data=None, filename_targets=None):
         self.path_data = path_data
         self.filename_targets = filename_targets
@@ -348,20 +360,7 @@ class OptRetina(Dataset):
         """
 
         im = floatX(np.transpose(im, (2, 0, 1)))
-        return OptRetina.jf_trafo(im)
-
-    @staticmethod
-    def jf_trafo(image):
-        """Apply Jeffrey de Fauw's transformation"""
-
-        #Recovered from model_dump['data_loader_params'].zmuv_mean
-        # and *.zmuv_std of 2015_07_17_123003.pkl in Jeffrey's repo:
-        ZMUV_MEAN = 0.04166667
-        ZMUV_STD = 0.20412415
-
-        image /= 255
-        return (image - ZMUV_MEAN) / (0.05 + ZMUV_STD)
-
+        return KaggleDR.jf_trafo(im)
 
     def load_image(self, filename):
         filename = self.build_absolute_filename(filename)
