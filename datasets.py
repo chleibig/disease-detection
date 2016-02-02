@@ -158,20 +158,6 @@ class KaggleDR(Dataset):
 
     """
 
-    def __init__(self, path_data=None, filename_targets=None):
-        self.path_data = path_data
-        self.filename_targets = filename_targets
-        labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
-        self.image_filenames = labels['image']
-        # we store all labels
-        self._y = np.array(labels['level'])
-        self._n_samples = len(self.y)
-        # we might cache some data later on
-        self.X = None
-        # because self.X might be a subset of the entire data set, we track
-        # wich samples we have cached
-        self.indices_in_X = None
-
     @staticmethod
     def standard_normalize(image):
         """Normalize image to have zero mean and unit variance.
@@ -212,6 +198,22 @@ class KaggleDR(Dataset):
         image /= 255
         return (image - ZMUV_MEAN) / (0.05 + ZMUV_STD)
 
+    def __init__(self, path_data=None, filename_targets=None,
+                 preprocessing=standard_normalize):
+        self.path_data = path_data
+        self.filename_targets = filename_targets
+        labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
+        self.image_filenames = labels['image']
+        # we store all labels
+        self._y = np.array(labels['level'])
+        self._n_samples = len(self.y)
+        # we might cache some data later on
+        self.X = None
+        # because self.X might be a subset of the entire data set, we track
+        # wich samples we have cached
+        self.indices_in_X = None
+        self.preprocessing = preprocessing
+
     def load_image(self, filename):
         """
         Load image.
@@ -230,10 +232,7 @@ class KaggleDR(Dataset):
         filename = os.path.join(self.path_data, filename + '.jpeg')
         return np.array(Image.open(filename))
 
-
-
-    @staticmethod
-    def prepare_image(im):
+    def prepare_image(self, im):
         """
         Prepare image.
 
@@ -249,7 +248,7 @@ class KaggleDR(Dataset):
         """
 
         im = floatX(np.transpose(im, (2, 0, 1)))
-        return KaggleDR.standard_normalize(im)
+        return self.preprocessing(im)
 
     def load_batch(self, indices):
         """
@@ -302,7 +301,8 @@ class OptRetina(Dataset):
 
     """
 
-    def __init__(self, path_data=None, filename_targets=None):
+    def __init__(self, path_data=None, filename_targets=None,
+                 preprocessing=KaggleDR.jf_trafo):
         self.path_data = path_data
         self.filename_targets = filename_targets
         labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
@@ -316,6 +316,7 @@ class OptRetina(Dataset):
         # because self.X might be a subset of the entire data set, we track
         # wich samples we have cached
         self.indices_in_X = None
+        self.preprocessing = preprocessing
 
     @staticmethod
     def build_unique_filenames(data_frame):
@@ -345,8 +346,7 @@ class OptRetina(Dataset):
             assert len(X) == len(y) == len(indices)
             return X, y
 
-    @staticmethod
-    def prepare_image(im):
+    def prepare_image(self, im):
         """
         Prepare image.
 
@@ -362,7 +362,7 @@ class OptRetina(Dataset):
         """
 
         im = floatX(np.transpose(im, (2, 0, 1)))
-        return KaggleDR.jf_trafo(im)
+        return self.preprocessing(im)
 
     def load_image(self, filename):
         filename = self.build_absolute_filename(filename)

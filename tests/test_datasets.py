@@ -61,13 +61,34 @@ class TestDataset:
             np.testing.assert_array_equal(idx_train, test_idx_train)
             np.testing.assert_array_equal(idx_test, test_idx_test)
 
+class TestKaggleDR:
+    @pytest.fixture
+    def dataset(self):
+        dataset = datasets.KaggleDR(
+                        path_data='tests/ref_data/KDR/sample_JF_512',
+                        filename_targets='tests/ref_data/KDR/sampleLabels.csv')
+        return dataset
+
+    def test_preprocessing_is_applied(self, dataset):
+        dataset.preprocessing = datasets.KaggleDR.standard_normalize
+        sn_image_0, _ = dataset.load_batch([0])
+        dataset.preprocessing = datasets.KaggleDR.jf_trafo
+        jf_image_0, _ = dataset.load_batch([0])
+        dataset.preprocessing = datasets.KaggleDR.standard_normalize
+        sn_image_1, _ = dataset.load_batch([0])
+        dataset.preprocessing = datasets.KaggleDR.jf_trafo
+        jf_image_1, _ = dataset.load_batch([0])
+
+        np.testing.assert_array_equal(sn_image_0, sn_image_1)
+        np.testing.assert_array_equal(jf_image_0, jf_image_1)
 
 class TestOptRetina:
     @pytest.fixture
     def dataset(self):
         dataset = datasets.OptRetina(
                          path_data='tests/ref_data/OR/sample_JF_512',
-                         filename_targets='tests/ref_data/OR/sampleLabels.csv')
+                         filename_targets='tests/ref_data/OR/sampleLabels.csv',
+                         preprocessing=datasets.KaggleDR.standard_normalize)
         return dataset
 
     def test_build_unique_filenames(self):
