@@ -1,6 +1,7 @@
+import recipy
+
 from __future__ import print_function, division
 
-import os
 import numpy as np
 import theano
 import theano.tensor as T
@@ -17,9 +18,7 @@ X = T.tensor4('X')
 y = T.ivector('y')
 img_dim = T.matrix('img_dim')
 
-weights = '/home/cl/Downloads/kdr_solutions/JeffreyDF/' \
-          'kaggle_diabetic_retinopathy/dumps/' \
-          '2015_07_17_123003_PARAMSDUMP.pkl'
+weights = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 
 #Recovered from model_dump['data_loader_params'].zmuv_mean and *.zmuv_std
 ZMUV_MEAN = np.array([[[[ 0.04166667]]]], dtype=np.float32)
@@ -31,14 +30,12 @@ network['0'].input_var = X
 network['22'].input_var = img_dim
 prob = network['31']
 
-path = '/home/cl/Downloads/data_kaggle_dr'
 batch_size = 2
 n_epoch = 1
-# fn_labels = 'trainLabels_partial.csv'
-fn_labels = 'o_O/retinopathy_solution.csv'
 
-kdr = KaggleDR(path_data=os.path.join(path, 'o_O/test_512'),
-               filename_targets=os.path.join(path, fn_labels))
+kdr = KaggleDR(path_data='data/kaggle_dr/test_JF_512',
+               filename_targets='data/kaggle_dr/retinopathy_solution.csv',
+               preprocessing=KaggleDR.jf_trafo)
 
 output = lasagne.layers.get_output(prob, deterministic=True)
 y_pred = T.argmax(output, axis=1)
@@ -53,13 +50,6 @@ progbar = Progbar(kdr.n_samples)
 for batch in kdr.iterate_minibatches(np.arange(kdr.n_samples),
                                      batch_size, shuffle=False):
     inputs, targets = batch
-    # Reverse standard_normalize transformation performed by
-    # KaggleDR.standard_normalize
-    inputs  = (inputs * KaggleDR.STD[:, np.newaxis, np.newaxis]) + \
-              KaggleDR.MEAN[:, np.newaxis, np.newaxis]
-    #  and apply instead:
-    inputs /= 255
-    inputs = (inputs - ZMUV_MEAN) / (0.05 + ZMUV_STD) # values from
     n_s = len(targets)
     _img_dim = np.concatenate(
         (np.full((n_s, 1), inputs.shape[2], dtype=np.float32),
@@ -80,5 +70,5 @@ print('Kappa:', kp_all)
 results = {'y_pred': all_y_pred, 'y': all_y,
            'acc': acc_all, 'kappa': kp_all}
 
-# with open('results.pkl', 'wb') as h:
-#     pickle.dump(results, h)
+with open('results.pkl', 'wb') as h:
+    pickle.dump(results, h)
