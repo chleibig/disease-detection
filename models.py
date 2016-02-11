@@ -314,6 +314,56 @@ def jeffrey_df(input_var=None, width=512, height=512,
 
     return net
 
+def jfnet18_to_keras(filename='models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'):
+    """Convert architecture of jfnet up to layer 18 to keras and assign weights
+       originally trained on Kaggle DR data and provided by Jeffrey de Fauw"""
+
+    from keras import backend
+    assert backend._BACKEND == 'theano', \
+        'Check dim_ordering before using ' + backend._BACKEND
+    from keras.models import Sequential
+    from keras.layers.convolutional import Convolution2D, MaxPooling2D
+    from keras.layers.advanced_activations import LeakyReLU
+
+    nl = jeffrey_df(filename=filename)
+    nk = Sequential()
+
+    for l in range(1, 19):
+        l = str(l)
+        if nl[l].__class__.__name__ == 'Conv2DDNNLayer':
+            # Get weights and biases
+            [W, b] = nl[l].get_params()
+            # heuristic because keras does not support untied biases:
+            tied_b = np.mean(b.get_value(), axis=(1,2))
+            conv_layer = Convolution2D(nl[l].num_filters,
+                                       nl[l].filter_size[0], nl[l].filter_size[1],
+                                       activation=LeakyReLU(alpha=nl[l].nonlinearity.leakiness),
+                                       weights=[W.get_value(), tied_b],
+                                       border_mode='same',
+                                       subsample=nl[l].stride,
+                                       dim_ordering='th',
+                                       W_regularizer=None,
+                                       b_regularizer=None,
+                                       activity_regularizer=None,
+                                       W_constraint=None,
+                                       b_constraint=None)
+            conv_layer.name = l
+            if l == '1':
+                _, nb_channels, width, height = lasagne.layers.get_output_shape(nl['0'])
+                conv_layer.set_input_shape((None, nb_channels, width, height))
+
+            nk.add(conv_layer)
+
+        if nl[l].__class__.__name__ == 'MaxPool2DDNNLayer':
+            mp_layer = MaxPooling2D(pool_size=nl[l].pool_size,
+                                strides=nl[l].stride,
+                                border_mode='valid',
+                                dim_ordering='th')
+            mp_layer.name = l
+            nk.add(mp_layer)
+
+    return nk
+
 
 def load_weights(layer, filename):
     """
