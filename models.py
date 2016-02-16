@@ -322,11 +322,20 @@ def jfnet18_to_keras(filename='models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pk
     assert backend._BACKEND == 'theano', \
         'Check dim_ordering before using ' + backend._BACKEND
     from keras.models import Sequential
-    from keras.layers.convolutional import Convolution2D, MaxPooling2D
+    from keras.layers.convolutional import Convolution2D, MaxPooling2D, \
+        ZeroPadding2D
     from keras.layers.advanced_activations import LeakyReLU
 
     nl = jeffrey_df(filename=filename)
     nk = Sequential()
+
+    # First conv layer has strides (2, 2) to be evaluated on the original
+    # image size:
+    padding_layer = ZeroPadding2D((3, 3))
+    padding_layer.name = '0'
+    _, nb_channels, width, height = lasagne.layers.get_output_shape(nl['0'])
+    padding_layer.set_input_shape((None, nb_channels, width, height))
+    nk.add(padding_layer)
 
     for l in range(1, 19):
         l = str(l)
@@ -349,8 +358,7 @@ def jfnet18_to_keras(filename='models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pk
                                        b_constraint=None)
             conv_layer.name = l
             if l == '1':
-                _, nb_channels, width, height = lasagne.layers.get_output_shape(nl['0'])
-                conv_layer.set_input_shape((None, nb_channels, width, height))
+                conv_layer.border_mode = 'valid'
 
             nk.add(conv_layer)
 
