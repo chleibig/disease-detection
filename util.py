@@ -124,21 +124,22 @@ class TrainingMonitor(keras.callbacks.Callback):
        http://keras.io/callbacks/
 
     """
-    def __init__(self, history):
+    def __init__(self, history, show_accuracy=False):
         super(TrainingMonitor, self).__init__()
         self.loss_plot = plotting.LossPlot(1)
-        self.acc_plot = plotting.AccuracyPlot(2)
         self.history = history
+        if show_accuracy:
+            self.acc_plot = plotting.AccuracyPlot(2)
 
     def on_epoch_end(self, epoch, logs={}):
         train_loss = self.history.history['loss'][-1]
         val_loss = self.history.history['val_loss'][-1]
-
-        train_acc = self.history.history['acc'][-1]
-        val_acc = self.history.history['val_acc'][-1]
-
         self.loss_plot.plot(train_loss, val_loss, epoch)
-        self.acc_plot.plot(train_acc, val_acc, epoch)
+
+        if hasattr(self, 'acc_plot'):
+            train_acc = self.history.history['acc'][-1]
+            val_acc = self.history.history['val_acc'][-1]
+            self.acc_plot.plot(train_acc, val_acc, epoch)
 
 
 class AdaptiveLearningRateScheduler(keras.callbacks.Callback):
