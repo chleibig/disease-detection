@@ -18,10 +18,6 @@ img_dim = T.matrix('img_dim')
 
 weights = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 
-#Recovered from model_dump['data_loader_params'].zmuv_mean and *.zmuv_std
-ZMUV_MEAN = np.array([[[[ 0.04166667]]]], dtype=np.float32)
-ZMUV_STD = np.array([[[[ 0.20412415]]]], dtype=np.float32)
-
 network = models.jeffrey_df(width=512, height=512, filename=weights)
 
 network['0'].input_var = X
