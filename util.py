@@ -170,7 +170,7 @@ class AdaptiveLearningRateScheduler(keras.callbacks.Callback):
             self.best = current
             self.wait = 0
         else:
-            if self.wait <= self.patience:
+            if self.wait < self.patience:
                 self.wait += 1
             else:
                 self.lr *= self.decay
