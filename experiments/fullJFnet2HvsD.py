@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 
 import numpy as np
+import pandas as pd
 import theano
 import theano.tensor as T
 import lasagne
@@ -24,9 +25,15 @@ network['0'].input_var = X
 network['22'].input_var = img_dim
 prob = network['31']
 
+fname_labels = 'data/kaggle_dr/retinopathy_solution_wh.csv'
+
 kdr = KaggleDR(path_data='data/kaggle_dr/test_JF_512',
-               filename_targets='data/kaggle_dr/retinopathy_solution.csv',
+               filename_targets=fname_labels,
                preprocessing=KaggleDR.jf_trafo)
+
+df = pd.read_csv(fname_labels)
+width = df.width.values.astype(theano.config.floatX)
+height = df.height.values.astype(theano.config.floatX)
 
 output = lasagne.layers.get_output(prob, deterministic=True)
 forward_pass = theano.function([X, img_dim], output)
@@ -39,13 +46,11 @@ for batch in kdr.iterate_minibatches(np.arange(kdr.n_samples),
     inputs, targets = batch
     # Replace the following by using the correct image sizes
     n_s = len(targets)
-    _img_dim = np.concatenate(
-        (np.full((n_s, 1), inputs.shape[2], dtype=np.float32),
-         np.full((n_s, 1), inputs.shape[3], dtype=np.float32)),
-        axis=1)/700.  # jeffrey does that under load_image_and_process?!
-    probs[idx:idx+len(targets)] = forward_pass(inputs, _img_dim)
+    _img_dim = np.vstack((width[idx:idx+n_s],
+                          height[idx:idx+n_s])).T/700.  # jeffrey does that under load_image_and_process?!
+    probs[idx:idx+n_s] = forward_pass(inputs, _img_dim)
     progbar.add(inputs.shape[0])
-    idx += len(targets)
+    idx += n_s
 
 y_pred = np.argmax(probs, axis=1)
 acc = np.mean(np.equal(y_pred, kdr.y))
