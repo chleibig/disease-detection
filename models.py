@@ -170,7 +170,8 @@ def vgg19_fc8_to_prob(input_var=None, filename=None,
 
 
 def jeffrey_df(input_var=None, width=512, height=512,
-               filename=None, n_classes=5, batch_size=None):
+               filename=None, n_classes=5, batch_size=None,
+               untie_biases=True):
     """Setup network structure for JeffreyDF's network and optionally load
     pretrained weights
 
@@ -187,6 +188,8 @@ def jeffrey_df(input_var=None, width=512, height=512,
         if filename is not None, weights are loaded from filename
     n_classes : Optional[int]
         default 5 for transfer learning on Kaggle DR data
+    untie_biases : (default: True)
+        if set to False and weights are loaded the spatial mean is taken for each filter separately.
 
     Returns
     -------
@@ -211,71 +214,71 @@ def jeffrey_df(input_var=None, width=512, height=512,
     net['0'] = InputLayer((batch_size, 3, width, height), input_var=input_var,
                           name='images')
     net['1'] = ConvLayer(net['0'], 32, 7, stride=(2, 2), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['2'] = MaxPool2DDNNLayer(net['1'], 3, stride=(2, 2))
     net['3'] = ConvLayer(net['2'], 32, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['4'] = ConvLayer(net['3'], 32, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['5'] = MaxPool2DDNNLayer(net['4'], 3, stride=(2, 2))
     net['6'] = ConvLayer(net['5'], 64, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['7'] = ConvLayer(net['6'], 64, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['8'] = MaxPool2DDNNLayer(net['7'], 3, stride=(2, 2))
     net['9'] = ConvLayer(net['8'], 128, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['10'] = ConvLayer(net['9'], 128, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['11'] = ConvLayer(net['10'], 128, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['12'] = ConvLayer(net['11'], 128, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['13'] = MaxPool2DDNNLayer(net['12'], 3, stride=(2, 2))
     net['14'] = ConvLayer(net['13'], 256, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['15'] = ConvLayer(net['14'], 256, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['16'] = ConvLayer(net['15'], 256, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['17'] = ConvLayer(net['16'], 256, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
@@ -323,11 +326,17 @@ def jeffrey_df(input_var=None, width=512, height=512,
     if filename is not None:
         with open(filename, 'r') as f:
             weights = pickle.load(f)
+        if not untie_biases:
+            for i in range(1, 26, 2):
+                weights[i] = np.mean(weights[i], axis=(1, 2))
+
         set_all_param_values(net['31'], weights)
 
     return net
 
-def jfnet18_to_keras(filename='models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'):
+
+def jfnet18_to_keras(filename='models/jeffrey_df/'
+                              '2015_07_17_123003_PARAMSDUMP.pkl'):
     """Convert architecture of jfnet up to layer 18 to keras and assign weights
        originally trained on Kaggle DR data and provided by Jeffrey de Fauw"""
 
