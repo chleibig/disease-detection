@@ -285,31 +285,38 @@ def jeffrey_df(input_var=None, width=512, height=512,
     net['18'] = MaxPool2DDNNLayer(net['17'], 3, stride=(2, 2),
                                   name='coarse_last_pool')
     net['19'] = DropoutLayer(net['18'], p=0.5)
-    net['20'] = DenseLayer(net['19'], num_units=1024, nonlinearity=None,
-                           W=lasagne.init.Orthogonal(1.0),
-                           b=lasagne.init.Constant(0.1),
-                           name='first_fc_0')
+    net['20'] = ConvLayer(net['19'], 1024, 7, stride=(1, 1), pad=0,
+                          nonlinearity=None,
+                          W=lasagne.init.Orthogonal(1.0),
+                          b=lasagne.init.Constant(0.1),
+                          name='first_fc_0_as_conv')
     net['21'] = FeaturePoolLayer(net['20'], 2)
-    net['22'] = InputLayer((batch_size, 2), name='imgdim')
+    net['22'] = InputLayer((batch_size, 2,
+                            net['21'].output_shape[2],
+                            net['21'].output_shape[3]), name='imgdim')
     net['23'] = ConcatLayer([net['21'], net['22']])
-    #Combine representations of both eyes
-    net['24'] = ReshapeLayer(net['23'], (-1, net['23'].output_shape[1]*2))
+    # Combine representations of both eyes
+    net['24'] = ReshapeLayer(net['23'], (-1, net['23'].output_shape[1] * 2,
+                                         [2], [3]))
     net['25'] = DropoutLayer(net['24'], p=0.5)
-    net['26'] = DenseLayer(net['25'], num_units=1024, nonlinearity=None,
-                           W=lasagne.init.Orthogonal(1.0),
-                           b=lasagne.init.Constant(0.1),
-                           name='combine_repr_fc')
+    net['26'] = ConvLayer(net['25'], 1024, 1, stride=(1, 1), pad=0,
+                          nonlinearity=None,
+                          W=lasagne.init.Orthogonal(1.0),
+                          b=lasagne.init.Constant(0.1),
+                          name='combine_repr_fc_as_conv')
     net['27'] = FeaturePoolLayer(net['26'], 2)
     net['28'] = DropoutLayer(net['27'], p=0.5)
-    net['29'] = DenseLayer(net['28'],
-
-                           num_units=n_classes * 2,
-                           nonlinearity=None,
-                           W=lasagne.init.Orthogonal(1.0),
-                           b=lasagne.init.Constant(0.1))
-    # Reshape back to the number of desired classes
+    net['29'] = ConvLayer(net['28'], n_classes * 2, 1, stride=(1, 1), pad=0,
+                          nonlinearity=None,
+                          W=lasagne.init.Orthogonal(1.0),
+                          b=lasagne.init.Constant(0.1))
+    # Reshape back to the number of desired classes and temporarily concatenate
+    # potentially multiple spatial predictions along sample dimension
     net['30'] = ReshapeLayer(net['29'], (-1, n_classes))
-    net['31'] = NonlinearityLayer(net['30'], nonlinearity=softmax)
+    n_w = net['29'].output_shape[2]
+    n_h = net['29'].output_shape[3]
+    net['31a'] = NonlinearityLayer(net['30'], nonlinearity=softmax)
+    net['31'] = ReshapeLayer(net['31a'], (-1, n_classes, n_w, n_h))
 
     # Combine conv net features according to Zheng et al. (2016): Good
     # practice in CNN feature transfer
@@ -326,6 +333,13 @@ def jeffrey_df(input_var=None, width=512, height=512,
     if filename is not None:
         with open(filename, 'r') as f:
             weights = pickle.load(f)
+
+        # layer 20 FC -> Conv2D
+        weights[26] = np.reshape(weights[26].T, (1024, 256, 7, 7))
+        # layer 26 FC -> Conv2D
+        weights[28] = np.reshape(weights[28].T, (1024, 1028, 1, 1))
+        # layer 29 FC -> Conv2D
+        weights[30] = np.reshape(weights[30].T, (n_classes * 2, 512, 1, 1))
         if not untie_biases:
             for i in range(1, 26, 2):
                 weights[i] = np.mean(weights[i], axis=(1, 2))
