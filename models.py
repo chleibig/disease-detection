@@ -321,9 +321,9 @@ def jeffrey_df(input_var=None, width=512, height=512,
     # Combine conv net features according to Zheng et al. (2016): Good
     # practice in CNN feature transfer
     selection = ['1', '4', '7', '12', '17', '18']
-
     pooled_features = [lasagne.layers.Pool2DLayer(net[k],
-                       pool_size=net[k].output_shape[-1],
+                       pool_size=(net[k].output_shape[-2],
+                                  net[k].output_shape[-1]),
                        stride=None,
                        pad=(0, 0),
                        ignore_border=True,
