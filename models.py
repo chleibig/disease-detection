@@ -208,7 +208,7 @@ def jeffrey_df(input_var=None, width=512, height=512,
 
     net = {}
 
-    net['0'] = InputLayer((batch_size, 3, width, height), input_var=input_var,
+    net['0'] = InputLayer((batch_size, 3, height, width), input_var=input_var,
                           name='images')
     net['1'] = ConvLayer(net['0'], 32, 7, stride=(2, 2), pad='same',
                          untie_biases=True,
