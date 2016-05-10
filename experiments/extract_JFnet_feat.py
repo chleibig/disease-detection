@@ -44,7 +44,7 @@ def build_second_input(n_samples):
 conv_combined = np.zeros((kdr.n_samples,) +
                          network['conv_combined'].output_shape[1:])
 probs = np.zeros((kdr.n_samples,) + network['31'].output_shape[1:])
-batch_size = 2
+batch_size = 20
 progbar = ProgressBar(int(kdr.n_samples / batch_size))
 
 for idx, batch in enumerate(kdr.iterate_minibatches(
@@ -55,7 +55,7 @@ for idx, batch in enumerate(kdr.iterate_minibatches(
     _img_dim = build_second_input(n_s)
     current = slice(idx * batch_size, idx * batch_size + n_s)
     conv_combined[current], probs[current] = forward_pass(inputs, _img_dim)
-    progbar.update_iteration(idx)
+    progbar.animate_ipython(idx)
 
 np.savez_compressed('experiments/train_JF_2048_JFnet_feat.npz',
                     conv_combined=conv_combined,
