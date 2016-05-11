@@ -17,6 +17,7 @@ from lasagne.layers.dnn import MaxPool2DDNNLayer
 from lasagne.layers import FeaturePoolLayer
 from lasagne.layers import ConcatLayer
 from lasagne.layers import ReshapeLayer
+import theano.tensor as T
 
 
 def vgg19(input_var=None, filename=None, n_classes=1000, p=None):
@@ -311,13 +312,9 @@ def jeffrey_df(input_var=None, width=512, height=512,
     # Combine conv net features according to Zheng et al. (2016): Good
     # practice in CNN feature transfer
     selection = ['1', '4', '7', '12', '17', '18']
-
-    pooled_features = [lasagne.layers.Pool2DLayer(net[k],
-                       pool_size=net[k].output_shape[-1],
-                       stride=None,
-                       pad=(0, 0),
-                       ignore_border=True,
-                       mode='average_exc_pad') for k in selection]
+    pooled_features = [lasagne.layers.GlobalPoolLayer(net[k],
+                                                      pool_function=T.mean)
+                       for k in selection]
     net['conv_combined'] = lasagne.layers.ConcatLayer(pooled_features, axis=1)
 
     if filename is not None:
