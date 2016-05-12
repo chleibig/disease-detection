@@ -17,6 +17,7 @@ from lasagne.layers.dnn import MaxPool2DDNNLayer
 from lasagne.layers import FeaturePoolLayer
 from lasagne.layers import ConcatLayer
 from lasagne.layers import ReshapeLayer
+from lasagne.layers import DimshuffleLayer
 import theano.tensor as T
 
 
@@ -291,14 +292,23 @@ def jeffrey_df(input_var=None, width=512, height=512,
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1),
                           name='first_fc_0_as_conv')
+    # last ConvLayer before eye blending, hence it this stage we now how
+    # many spatial predictions are performed for each eye separately:
+    n_h = net['20'].output_shape[2]
+    n_w = net['20'].output_shape[3]
     net['21'] = FeaturePoolLayer(net['20'], 2)
     net['22'] = InputLayer((batch_size, 2,
                             net['21'].output_shape[2],
                             net['21'].output_shape[3]), name='imgdim')
     net['23'] = ConcatLayer([net['21'], net['22']])
+    # For the subsequent reshapes move the feature dimension to the end in
+    # in order to make it the fastest changing one (in C order) and the spatial
+    # dimensions to the begin to separate these from the eye blending part.
+    net['24a'] = DimshuffleLayer(net['23'], (2, 3, 0, 1))
     # Combine representations of both eyes
-    net['24'] = ReshapeLayer(net['23'], (-1, net['23'].output_shape[1] * 2,
-                                         [2], [3]))
+    net['24b'] = ReshapeLayer(net['24a'], ([0], [1], -1,
+                                           net['24a'].output_shape[-1] * 2))
+    net['24'] = DimshuffleLayer(net['24b'], (2, 3, 0, 1))
     net['25'] = DropoutLayer(net['24'], p=0.5)
     net['26'] = ConvLayer(net['25'], 1024, 1, stride=(1, 1), pad=0,
                           nonlinearity=None,
@@ -313,11 +323,14 @@ def jeffrey_df(input_var=None, width=512, height=512,
                           b=lasagne.init.Constant(0.1))
     # Reshape back to the number of desired classes and temporarily concatenate
     # potentially multiple spatial predictions along sample dimension
-    net['30'] = ReshapeLayer(net['29'], (-1, n_classes))
-    n_w = net['29'].output_shape[2]
-    n_h = net['29'].output_shape[3]
+    net['30a'] = DimshuffleLayer(net['29'], (2, 3, 0, 1))
+    net['30b'] = ReshapeLayer(net['30a'], ([0], [1], -1, n_classes))
+    net['30c'] = DimshuffleLayer(net['30b'], (2, 0, 1, 3))
+    net['30'] = ReshapeLayer(net['30c'], (-1, n_classes))
+
     net['31a'] = NonlinearityLayer(net['30'], nonlinearity=softmax)
-    net['31'] = ReshapeLayer(net['31a'], (-1, n_classes, n_w, n_h))
+    net['31b'] = ReshapeLayer(net['31a'], (-1, n_h, n_w, n_classes))
+    net['31'] = DimshuffleLayer(net['31b'], (0, 3, 1, 2))
 
     # Combine conv net features according to Zheng et al. (2016): Good
     # practice in CNN feature transfer
