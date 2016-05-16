@@ -430,3 +430,26 @@ def load_weights(layer, filename):
 
     raise NotImplementedError('Format of {filename} not known'.format(
         filename=filename))
+
+
+def save_weights(layer, filename):
+    """
+    Save network weights of all layers below layer (including the layer
+    itself).
+
+    Parameters
+    ----------
+    layer : Layer or list
+        The :class:`Layer` instance for which to gather all parameter values,
+        or a list of :class:`Layer` instances.
+    filename : str with ending .npz
+
+    """
+
+    if filename.endswith('.npz'):
+        np.savez_compressed(filename,
+                            *lasagne.layers.get_all_param_values(layer))
+        return
+
+    raise NotImplementedError('Format indicated by ending of {filename} not'
+                              'implemented'.format(filename=filename))
