@@ -172,7 +172,8 @@ def vgg19_fc8_to_prob(input_var=None, filename=None,
 
 
 def jeffrey_df(input_var=None, width=512, height=512,
-               filename=None, n_classes=5, batch_size=None):
+               filename=None, n_classes=5, batch_size=None,
+               untie_biases=True):
     """Setup network structure for JeffreyDF's network and optionally load
     pretrained weights
 
@@ -189,6 +190,8 @@ def jeffrey_df(input_var=None, width=512, height=512,
         if filename is not None, weights are loaded from filename
     n_classes : Optional[int]
         default 5 for transfer learning on Kaggle DR data
+    untie_biases : (default: True)
+        if set to False and weights are loaded the spatial mean is taken for each filter separately.
 
     Returns
     -------
@@ -213,71 +216,71 @@ def jeffrey_df(input_var=None, width=512, height=512,
     net['0'] = InputLayer((batch_size, 3, height, width), input_var=input_var,
                           name='images')
     net['1'] = ConvLayer(net['0'], 32, 7, stride=(2, 2), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['2'] = MaxPool2DDNNLayer(net['1'], 3, stride=(2, 2))
     net['3'] = ConvLayer(net['2'], 32, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['4'] = ConvLayer(net['3'], 32, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['5'] = MaxPool2DDNNLayer(net['4'], 3, stride=(2, 2))
     net['6'] = ConvLayer(net['5'], 64, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['7'] = ConvLayer(net['6'], 64, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['8'] = MaxPool2DDNNLayer(net['7'], 3, stride=(2, 2))
     net['9'] = ConvLayer(net['8'], 128, 3, stride=(1, 1), pad='same',
-                         untie_biases=True,
+                         untie_biases=untie_biases,
                          nonlinearity=LeakyRectify(leakiness=0.5),
                          W=lasagne.init.Orthogonal(1.0),
                          b=lasagne.init.Constant(0.1))
     net['10'] = ConvLayer(net['9'], 128, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['11'] = ConvLayer(net['10'], 128, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['12'] = ConvLayer(net['11'], 128, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['13'] = MaxPool2DDNNLayer(net['12'], 3, stride=(2, 2))
     net['14'] = ConvLayer(net['13'], 256, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['15'] = ConvLayer(net['14'], 256, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['16'] = ConvLayer(net['15'], 256, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
     net['17'] = ConvLayer(net['16'], 256, 3, stride=(1, 1), pad='same',
-                          untie_biases=True,
+                          untie_biases=untie_biases,
                           nonlinearity=LeakyRectify(leakiness=0.5),
                           W=lasagne.init.Orthogonal(1.0),
                           b=lasagne.init.Constant(0.1))
@@ -294,7 +297,9 @@ def jeffrey_df(input_var=None, width=512, height=512,
     n_h = net['20'].output_shape[2]
     n_w = net['20'].output_shape[3]
     net['21'] = FeaturePoolLayer(net['20'], 2)
-    net['22'] = InputLayer((batch_size, 2), name='imgdim')
+    net['22'] = InputLayer((batch_size, 2,
+                            net['21'].output_shape[2],
+                            net['21'].output_shape[3]), name='imgdim')
     net['23'] = ConcatLayer([net['21'], net['22']])
     # For the subsequent reshapes move the feature dimension to the end in
     # in order to make it the fastest changing one (in C order) and the spatial
@@ -305,10 +310,11 @@ def jeffrey_df(input_var=None, width=512, height=512,
                                            net['24a'].output_shape[-1] * 2))
     net['24'] = DimshuffleLayer(net['24b'], (2, 3, 0, 1))
     net['25'] = DropoutLayer(net['24'], p=0.5)
-    net['26'] = DenseLayer(net['25'], num_units=1024, nonlinearity=None,
-                           W=lasagne.init.Orthogonal(1.0),
-                           b=lasagne.init.Constant(0.1),
-                           name='combine_repr_fc')
+    net['26'] = ConvLayer(net['25'], 1024, 1, stride=(1, 1), pad=0,
+                          nonlinearity=None,
+                          W=lasagne.init.Orthogonal(1.0),
+                          b=lasagne.init.Constant(0.1),
+                          name='combine_repr_fc_as_conv')
     net['27'] = FeaturePoolLayer(net['26'], 2)
     net['28'] = DropoutLayer(net['27'], p=0.5)
     net['29'] = ConvLayer(net['28'], n_classes * 2, 1, stride=(1, 1), pad=0,
@@ -337,6 +343,17 @@ def jeffrey_df(input_var=None, width=512, height=512,
     if filename is not None:
         with open(filename, 'r') as f:
             weights = pickle.load(f)
+
+        # layer 20 FC -> Conv2D
+        weights[26] = np.reshape(weights[26].T, (1024, 256, 7, 7))
+        # layer 26 FC -> Conv2D
+        weights[28] = np.reshape(weights[28].T, (1024, 1028, 1, 1))
+        # layer 29 FC -> Conv2D
+        weights[30] = np.reshape(weights[30].T, (n_classes * 2, 512, 1, 1))
+        if not untie_biases:
+            for i in range(1, 26, 2):
+                weights[i] = np.mean(weights[i], axis=(1, 2))
+
         set_all_param_values(net['31'], weights)
 
     return net
