@@ -179,3 +179,76 @@ class AdaptiveLearningRateScheduler(keras.callbacks.Callback):
                 if self.verbose > 0:
                     print('Epoch {}: lower learning rate to {}'
                           .format(epoch, self.lr))
+
+
+class SelectiveSampler(object):
+    """Selective sampling of informative instances
+
+    Inspired by: Grinsven et al. (2016): Fast convolutional neural network
+    training using selective data sampling: Application to hemorrhage
+    detection in color fundus images
+
+    """
+
+    def __init__(self, M, y):
+        """Instantiate SelectiveSampler
+
+        Parameters
+        ==========
+
+        M : int
+            The number of samples to draw from each class
+        y : array_like, 1D, int
+            class labels of all samples
+
+        """
+        assert set(len(np.lib.arraysetops.unique(y))) == {0, 1}, \
+            'Labels have to be in {0, 1}.'
+        self.M = M
+        self.y = y
+        self.Xpos = np.where(y == 1)[0]
+        self.Xneg = np.where(y == 0)[0]
+
+    def sample(self, predictions=None, shuffle=True):
+        """Selective or random sampling with replacement
+
+        Parameters
+        ==========
+
+        shuffle : bool (True by default)
+            If True, indices are shuffled before they are returned
+
+        Returns
+        =======
+
+        indices : array_like, int, of length 2*self.M with entries from the
+                  interval [0, len(self.y)-1]
+
+        """
+        if predictions is not None:
+            # steps 4 and 5 from paper
+            pass
+        else:
+            # We sample uniformly as predictions are not available (e.g. in
+            # the first run)
+            Xpos_t = self._random_sample('pos')
+            Xneg_t = self._random_sample('neg')
+            indices = np.concatenate(Xpos_t, Xneg_t)
+
+        if shuffle:
+            np.random.shuffle(indices)
+        return indices
+
+    def _random_sample(self, case='neg'):
+        if case == 'pos':
+            return self.Xpos[np.random.randint(low=0,
+                                               high=len(self.Xpos),
+                                               size=self.M)]
+        if case == 'neg':
+            return self.Xneg[np.random.randint(low=0,
+                                               high=len(self.Xneg),
+                                               size=self.M)]
+
+
+
+
