@@ -184,37 +184,42 @@ class AdaptiveLearningRateScheduler(keras.callbacks.Callback):
 class SelectiveSampler(object):
     """Selective sampling of informative instances
 
-    Inspired by: Grinsven et al. (2016): Fast convolutional neural network
+    Inspired by: Grinsven et al. (2016): "Fast convolutional neural network
     training using selective data sampling: Application to hemorrhage
-    detection in color fundus images
+    detection in color fundus images"
 
     """
 
     def __init__(self, M, y):
-        """Instantiate SelectiveSampler
+        """
 
         Parameters
         ==========
 
         M : int
-            The number of samples to draw from each class
+            The number of samples to draw from each class.
         y : array_like, 1D, int
             class labels of all samples
 
         """
-        assert set(len(np.lib.arraysetops.unique(y))) == {0, 1}, \
-            'Labels have to be in {0, 1}.'
+        # The following check throws a TypeError: 'int' object is not iterable?
+        # assert set(len(np.lib.arraysetops.unique(y))) == {0, 1}, \
+        #     'Labels have to be in {0, 1}.'
         self.M = M
         self.y = y
         self.Xpos = np.where(y == 1)[0]
         self.Xneg = np.where(y == 0)[0]
 
-    def sample(self, predictions=None, shuffle=True):
+    def sample(self, probs_neg=None, shuffle=True):
         """Selective or random sampling with replacement
 
         Parameters
         ==========
 
+        probs_neg : array_like, should correspond to the True entries of y == 0
+            probabilities for all 'negative' (<-> 0) samples. These are used
+            to assign selective sampling weights. If None, random sampling is
+            performed.
         shuffle : bool (True by default)
             If True, indices are shuffled before they are returned
 
@@ -225,15 +230,21 @@ class SelectiveSampler(object):
                   interval [0, len(self.y)-1]
 
         """
-        if predictions is not None:
-            # steps 4 and 5 from paper
-            pass
+        if probs_neg is not None:
+            assert len(probs_neg) == self.Xneg.shape[0]
+            # step 4
+            weights = np.abs(probs_neg)  # - l_i = - 0
+            sample_probs = weights / weights.sum()
+            # step 5
+            Xpos_t = self._random_sample('pos')
+            Xneg_t = self._selective_sample(sample_probs)
         else:
             # We sample uniformly as predictions are not available (e.g. in
             # the first run)
             Xpos_t = self._random_sample('pos')
             Xneg_t = self._random_sample('neg')
-            indices = np.concatenate(Xpos_t, Xneg_t)
+
+        indices = np.concatenate((Xpos_t, Xneg_t))
 
         if shuffle:
             np.random.shuffle(indices)
@@ -241,13 +252,26 @@ class SelectiveSampler(object):
 
     def _random_sample(self, case='neg'):
         if case == 'pos':
-            return self.Xpos[np.random.randint(low=0,
-                                               high=len(self.Xpos),
-                                               size=self.M)]
+            selection = np.random.randint(low=0,
+                                          high=len(self.Xpos),
+                                          size=self.M)
+            return self.Xpos[selection]
         if case == 'neg':
-            return self.Xneg[np.random.randint(low=0,
-                                               high=len(self.Xneg),
-                                               size=self.M)]
+            selection = np.random.randint(low=0,
+                                          high=len(self.Xneg),
+                                          size=self.M)
+            return self.Xneg[selection]
+
+    def _selective_sample(self, sample_probs):
+        frequencies = np.random.multinomial(self.M, sample_probs, size=1)[0]
+        selection = np.zeros((self.M,), dtype=np.int32)
+        pos = 0
+        for idx, freq in enumerate(frequencies):
+            selection[pos:pos + freq] = idx
+            pos += freq
+
+        return self.Xneg[selection]
+
 
 
 
