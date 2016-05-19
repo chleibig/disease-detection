@@ -15,16 +15,17 @@ from sklearn.metrics import roc_auc_score
 from keras.utils.generic_utils import Progbar
 
 import models
-from datasets import KaggleDR
+from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
 
-batch_size = 8
+batch_size = 10
 n_epoch = 10
 lr_logreg = 0.005
 lr_conv = 0.005
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
 size = 512
+dataset = 'optretina'
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 load_previous_weights = False
@@ -33,13 +34,20 @@ best_auc = 0.0
 X = T.tensor4('X')
 y = T.ivector('y')
 
-kdr = KaggleDR(path_data='data/kaggle_dr/train_JF_' + str(size),
-               filename_targets='data/kaggle_dr/trainLabels_bin.csv',
-               preprocessing=KaggleDR.jf_trafo)
-kdr_test = KaggleDR(path_data='data/kaggle_dr/test_JF_' + str(size),
-                    filename_targets='data/kaggle_dr/'
-                                     'retinopathy_solution_bin.csv',
-                    preprocessing=KaggleDR.jf_trafo)
+if dataset == 'KaggleDR':
+    ds = KaggleDR(path_data='data/kaggle_dr/train_JF_' + str(size),
+                  filename_targets='data/kaggle_dr/trainLabels_bin.csv',
+                  preprocessing=KaggleDR.jf_trafo)
+    ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_' + str(size),
+                       filename_targets='data/kaggle_dr/'
+                                        'retinopathy_solution_bin.csv',
+                       preprocessing=KaggleDR.jf_trafo)
+
+if dataset == 'optretina':
+    ds = OptRetina(path_data='data/optretina/data_JF_' + str(size),
+                   filename_targets='data/optretina/OR_diseased_labels.csv',
+                   preprocessing=KaggleDR.jf_trafo)
+
 
 untie_biases = defaultdict(lambda: False, {512: True})
 
@@ -47,7 +55,7 @@ network = models.jeffrey_df(input_var=X, width=size, height=size,
                             filename=weights_init,
                             untie_biases=untie_biases[size])
 
-n_classes = len(np.unique(kdr.y))
+n_classes = len(np.unique(ds.y))
 network['logreg'] = DenseLayer(network['conv_combined'],
                                num_units=n_classes,
                                nonlinearity=lasagne.nonlinearities.softmax)
@@ -97,10 +105,22 @@ train_iter = theano.function([X, y], [loss, predictions], updates=updates)
 eval_iter = theano.function([X, y], [loss_det, predictions_det])
 pred_iter = theano.function([X], predictions_det)
 
-idx_train, idx_val = train_test_split(np.arange(kdr.n_samples), stratify=kdr.y,
-                                      test_size=0.2, random_state=1234)
+if dataset == 'KaggleDR':
+    idx_train, idx_val = train_test_split(np.arange(ds.n_samples),
+                                          stratify=ds.y,
+                                          test_size=0.2,
+                                          random_state=1234)
+if dataset == 'optretina':
+    idx_train_val, idx_test = train_test_split(np.arange(ds.n_samples),
+                                               stratify=ds.y,
+                                               test_size=0.2,
+                                               random_state=1234)
+    idx_train, idx_val = train_test_split(idx_train_val,
+                                          stratify=ds.y[idx_train_val],
+                                          test_size=0.2,
+                                          random_state=1234)
 
-y_train = kdr.y[idx_train]
+y_train = ds.y[idx_train]
 N_DISEASED = np.sum(y_train == 1)
 IDX_HEALTHY = np.where(y_train == 0)[0]
 selective_sampler = SelectiveSampler(M=N_DISEASED, y=y_train)
@@ -116,30 +136,30 @@ for epoch in range(n_epoch):
     print('-' * 40)
     print("Training...")
 
-    if epoch == 0:
-        print('Select all training data...')
-        selection = np.arange(len(idx_train))
-    else:
-        print('Prediction on diseased images for selective sampling...')
-        progbar = Progbar(len(IDX_HEALTHY))
-        probs_neg = np.zeros((len(IDX_HEALTHY),))
-        pos = 0
-        for Xb, _ in kdr.iterate_minibatches(idx_train[IDX_HEALTHY],
-                                             batch_size,
-                                             shuffle=False):
-            prob_neg = pred_iter(Xb)[:, 0]
-            probs_neg[pos:pos + Xb.shape[0]] = prob_neg
-            progbar.add(Xb.shape[0], values=[("prob_neg", prob_neg.mean())])
-            pos += Xb.shape[0]
-        selection = selective_sampler.sample(probs_neg=probs_neg, shuffle=True)
+    # if epoch == 0:
+    print('Select all training data...')
+    selection = np.arange(len(idx_train))
+    # else:
+    #     print('Prediction on diseased images for selective sampling...')
+    #     progbar = Progbar(len(IDX_HEALTHY))
+    #     probs_neg = np.zeros((len(IDX_HEALTHY),))
+    #     pos = 0
+    #     for Xb, _ in ds.iterate_minibatches(idx_train[IDX_HEALTHY],
+    #                                         batch_size,
+    #                                         shuffle=False):
+    #         prob_neg = pred_iter(Xb)[:, 0]
+    #         probs_neg[pos:pos + Xb.shape[0]] = prob_neg
+    #         progbar.add(Xb.shape[0], values=[("prob_neg", prob_neg.mean())])
+    #         pos += Xb.shape[0]
+    #     selection = selective_sampler.sample(probs_neg=probs_neg, shuffle=True)
 
     progbar = Progbar(len(selection))
     loss_train = np.zeros((len(selection),))
     predictions_train = np.zeros((len(selection), 2))
-    y_train_sel = kdr.y[idx_train[selection]]
+    y_train_sel = ds.y[idx_train[selection]]
     pos = 0
-    for Xb, yb in kdr.iterate_minibatches(idx_train[selection], batch_size,
-                                          shuffle=False):
+    for Xb, yb in ds.iterate_minibatches(idx_train[selection], batch_size,
+                                         shuffle=False):
         if (pos % 40000) == 0:
             params_old = lasagne.layers.get_all_param_values(l_out)
             [loss, predictions] = train_iter(Xb, yb)
@@ -171,10 +191,10 @@ for epoch in range(n_epoch):
     progbar = Progbar(len(idx_val))
     loss_val = np.zeros(len(idx_val))
     predictions_val = np.zeros((len(idx_val), 2))
-    y_val = kdr.y[idx_val]
+    y_val = ds.y[idx_val]
     pos = 0
-    for Xb, yb in kdr.iterate_minibatches(idx_val, batch_size,
-                                          shuffle=False):
+    for Xb, yb in ds.iterate_minibatches(idx_val, batch_size,
+                                         shuffle=False):
         [loss, predictions] = eval_iter(Xb, yb)
         loss_val[pos:pos + Xb.shape[0]] = loss
         predictions_val[pos:pos + Xb.shape[0]] = predictions
@@ -200,14 +220,20 @@ print("Training took {:.3g} sec.".format(time.time() - start_time))
 # Testing
 ###########################################################################
 
-loss_test = np.zeros(kdr_test.n_samples)
-predictions_test = np.zeros((kdr_test.n_samples, 2))
-
 print("Testing...")
+
+if dataset == 'KaggleDR':
+    ds = ds_test
+    idx_test = np.arange(ds_test.n_samples)
+if dataset == 'optretina':
+    pass
+
+loss_test = np.zeros(len(idx_test))
+predictions_test = np.zeros((len(idx_test), 2))
+progbar = Progbar(len(idx_test))
 pos = 0
-progbar = Progbar(kdr_test.n_samples)
-for Xb, yb in kdr_test.iterate_minibatches(np.arange(kdr_test.n_samples),
-                                           batch_size, shuffle=False):
+for Xb, yb in ds.iterate_minibatches(idx_test,
+                                     batch_size, shuffle=False):
     loss, predictions = eval_iter(Xb, yb)
     loss_test[pos:pos + Xb.shape[0]] = loss
     predictions_test[pos:pos + Xb.shape[0]] = predictions
@@ -216,5 +242,4 @@ for Xb, yb in kdr_test.iterate_minibatches(np.arange(kdr_test.n_samples),
     pos += Xb.shape[0]
 
 print('Test loss: ', loss_test.mean())
-print('Test AUC: ', roc_auc_score(kdr_test.y, predictions_test[:, 1]))
-
+print('Test AUC: ', roc_auc_score(ds.y[idx_test], predictions_test[:, 1]))

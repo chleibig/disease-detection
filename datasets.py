@@ -305,7 +305,8 @@ class OptRetina(Dataset):
                  preprocessing=KaggleDR.jf_trafo):
         self.path_data = path_data
         self.filename_targets = filename_targets
-        labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
+        labels = pd.read_csv(self.filename_targets,
+                             dtype={'diseased': np.int32})
         self.image_filenames = OptRetina.build_unique_filenames(labels)
         self.extension = '.jpeg'
         # we store all labels
