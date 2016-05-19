@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 
-import os
+from collections import defaultdict
 import time
 import numpy as np
 import theano
@@ -8,6 +8,7 @@ import theano.tensor as T
 import lasagne
 from lasagne.layers import DenseLayer
 from lasagne.regularization import regularize_network_params, l2
+from lasagne.regularization import regularize_layer_params, l1
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics import roc_auc_score
 
@@ -16,22 +17,18 @@ from keras.utils.generic_utils import Progbar
 import models
 from datasets import KaggleDR
 
-batch_size = 10
-n_epoch = 0
-# ToDo:
-# * different learning rates for FC layer and lower layers!
-# * l1 regularization for softmax layer
-# * optimize for AUC
-# * check which decision the recommendation from British diabetic association 
-#   refers to
-learning_rate = 0.0001
-l2_lambda = 0.001
-size = 512
+batch_size = 4
+n_epoch = 10
+lr_logreg = 0.001
+lr_conv = 0.0001
+l2_lambda = 0.0005  # entire network
+l1_lambda = 0.0005  # only last layer
+size = 2048
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
-best_weights = 'best_weights.npz'
+load_previous_weights = True
+best_auc = 0.89435
 
-# Initialize symbolic variables
 X = T.tensor4('X')
 y = T.ivector('y')
 
@@ -43,8 +40,11 @@ kdr_test = KaggleDR(path_data='data/kaggle_dr/test_JF_' + str(size),
                                      'retinopathy_solution_bin.csv',
                     preprocessing=KaggleDR.jf_trafo)
 
+untie_biases = defaultdict(lambda: False, {512: True})
+
 network = models.jeffrey_df(input_var=X, width=size, height=size,
-                            filename=weights_init, untie_biases=True)
+                            filename=weights_init,
+                            untie_biases=untie_biases[size])
 
 n_classes = len(np.unique(kdr.y))
 network['logreg'] = DenseLayer(network['conv_combined'],
@@ -53,29 +53,45 @@ network['logreg'] = DenseLayer(network['conv_combined'],
 
 l_out = network['logreg']
 
-if os.path.exists(best_weights):
-    models.load_weights(l_out, best_weights)
+if load_previous_weights:
+    models.load_weights(l_out, 'best_weights.npz')
 
 # Scalar loss expression to be minimized during training:
 predictions = lasagne.layers.get_output(l_out)
 loss = lasagne.objectives.categorical_crossentropy(predictions, y)
 # Introduce class weight here?
 loss = loss.mean()
-# Besides global l2 regularization, l1 might be reasonable for the FC layer
-# once we have the histogram implementation
+
 l2_penalty = l2_lambda * regularize_network_params(l_out, l2)
-loss = loss + l2_penalty
+l1_penalty = l1_lambda * regularize_layer_params(l_out, l1)
+loss = loss + l2_penalty + l1_penalty
 
-params = lasagne.layers.get_all_params(l_out, trainable=True)
 
-updates = lasagne.updates.nesterov_momentum(loss, params,
-                                            learning_rate=learning_rate,
-                                            momentum=0.9)
+def build_updates(network, lr_conv, lr_logreg):
+    """Build updates with different learning rates for the conv stack
+       and the logistic regression layer
+
+    """
+
+    params_conv = lasagne.layers.get_all_params(network['conv_combined'],
+                                                trainable=True)
+    updates_conv = lasagne.updates.sgd(loss, params_conv,
+                                       learning_rate=lr_conv)
+    params_logreg = network['logreg'].get_params(trainable=True)
+    updates_logreg = lasagne.updates.sgd(loss, params_logreg,
+                                         learning_rate=lr_logreg)
+    updates = updates_conv
+    for k, v in updates_logreg.items():
+        updates[k] = v
+
+    return lasagne.updates.apply_nesterov_momentum(updates, momentum=0.9)
+
 
 predictions_det = lasagne.layers.get_output(l_out, deterministic=True)
 loss_det = lasagne.objectives.categorical_crossentropy(predictions_det, y)
 loss_det = loss_det.mean()
 
+updates = build_updates(network, lr_conv, lr_logreg)
 train_iter = theano.function([X, y], [loss, predictions], updates=updates)
 eval_iter = theano.function([X, y], [loss_det, predictions_det])
 
@@ -94,8 +110,6 @@ predictions_train = np.zeros((len(idx_train), 2))
 loss_val = np.zeros(len(idx_val))
 predictions_val = np.zeros((len(idx_val), 2))
 
-best_auc = 0.0
-
 for epoch in range(n_epoch):
     print('-' * 40)
     print('Epoch', epoch)
@@ -109,7 +123,20 @@ for epoch in range(n_epoch):
     y_train = kdr.y[idx_train[perm]]
     for Xb, yb in kdr.iterate_minibatches(idx_train[perm], batch_size,
                                           shuffle=False):
-        [loss, predictions] = train_iter(Xb, yb)
+	if (pos % 1000) == 0:
+            params_old = lasagne.layers.get_all_param_values(l_out)
+            [loss, predictions] = train_iter(Xb, yb)
+            params_new = lasagne.layers.get_all_param_values(l_out)
+            params_scale = np.array([np.linalg.norm(p_old.ravel())
+                                     for p_old in params_old])
+            updates_scale = np.array([np.linalg.norm((p_new - p_old).ravel())
+                                      for p_new, p_old in
+                                      zip(params_new, params_old)])
+            print('update_scale/param_scale: ',
+                  np.divide(updates_scale, params_scale))
+        else:
+            [loss, predictions] = train_iter(Xb, yb)
+        
         loss_train[pos:pos + Xb.shape[0]] = loss
         predictions_train[pos:pos + Xb.shape[0]] = predictions
 
@@ -139,13 +166,13 @@ for epoch in range(n_epoch):
 
     auc_val = roc_auc_score(y_val, predictions_val[:, 1])
 
+    print('Validation loss: ', loss_val.mean())
+    print('Validation AUC: ', auc_val)
+
     if auc_val > best_auc:
         best_auc = auc_val
         print('Saving currently best weights...')
-        save_weights(l_out, 'best_weights.npz')
-
-    print('Validation loss: ', loss_val.mean())
-    print('Validation AUC: ', auc_val)
+        models.save_weights(l_out, 'best_weights.npz')
 
 
 print("Training took {:.3g} sec.".format(time.time() - start_time))
@@ -164,7 +191,6 @@ progbar = Progbar(kdr_test.n_samples)
 for Xb, yb in kdr_test.iterate_minibatches(np.arange(kdr_test.n_samples),
                                            batch_size, shuffle=False):
     loss, predictions = eval_iter(Xb, yb)
-    progbar.add(Xb.shape[0], values=[("test loss", loss)])
     loss_test[pos:pos + Xb.shape[0]] = loss
     predictions_test[pos:pos + Xb.shape[0]] = predictions
 
