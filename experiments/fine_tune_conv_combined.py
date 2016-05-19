@@ -13,6 +13,7 @@ from sklearn.cross_validation import train_test_split
 from sklearn.metrics import roc_auc_score
 
 from keras.utils.generic_utils import Progbar
+from keras.preprocessing.image import ImageDataGenerator
 
 import models
 from datasets import KaggleDR, OptRetina
@@ -30,6 +31,18 @@ dataset = 'optretina'
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 load_previous_weights = False
 best_auc = 0.0
+
+# TODO: consider updating keras as data augmentation code has evolved
+datagen = ImageDataGenerator(featurewise_center=False,
+                             samplewise_center=False,
+                             featurewise_std_normalization=False,
+                             samplewise_std_normalization=False,
+                             zca_whitening=False, # apply ZCA whitening
+                             rotation_range=10., # degrees (0 to 180)
+                             width_shift_range=0.05, # fraction of total width
+                             height_shift_range=0.05, # fraction of tot. height
+                             horizontal_flip=True,
+                             vertical_flip=True)
 
 X = T.tensor4('X')
 y = T.ivector('y')
@@ -159,27 +172,36 @@ for epoch in range(n_epoch):
     predictions_train = np.zeros((len(selection), 2))
     y_train_sel = ds.y[idx_train[selection]]
     pos = 0
-    for Xb, yb in ds.iterate_minibatches(idx_train[selection], batch_size,
+    for Xb, yb in ds.iterate_minibatches(idx_train[selection], batch_size=100,
                                          shuffle=False):
-        if (pos % 40000) == 0:
-            params_old = lasagne.layers.get_all_param_values(l_out)
-            [loss, predictions] = train_iter(Xb, yb)
-            params_new = lasagne.layers.get_all_param_values(l_out)
-            params_scale = np.array([np.linalg.norm(p_old.ravel())
-                                     for p_old in params_old])
-            updates_scale = np.array([np.linalg.norm((p_new - p_old).ravel())
-                                      for p_new, p_old in
-                                      zip(params_new, params_old)])
-            print('update_scale/param_scale: ',
-                  np.divide(updates_scale, params_scale))
-        else:
-            [loss, predictions] = train_iter(Xb, yb)
+        # real-time data augmentation
+        for Xb, yb in datagen.flow(Xb, yb,
+                               batch_size=batch_size,
+                               shuffle=False,
+                               seed=None,
+                               save_to_dir=None,
+                               save_prefix="",
+                               save_format="jpeg"):
+            if (pos % 40000) == 0:
+                params_old = lasagne.layers.get_all_param_values(l_out)
+                [loss, predictions] = train_iter(Xb, yb)
+                params_new = lasagne.layers.get_all_param_values(l_out)
+                params_scale = np.array([np.linalg.norm(p_old.ravel())
+                                         for p_old in params_old])
+                updates_scale = np.array([np.linalg.norm((p_new - 
+                                                          p_old).ravel())
+                                          for p_new, p_old in
+                                          zip(params_new, params_old)])
+                print('update_scale/param_scale: ',
+                      np.divide(updates_scale, params_scale))
+            else:
+                [loss, predictions] = train_iter(Xb, yb)
 
-        loss_train[pos:pos + Xb.shape[0]] = loss
-        predictions_train[pos:pos + Xb.shape[0]] = predictions
+            loss_train[pos:pos + Xb.shape[0]] = loss
+            predictions_train[pos:pos + Xb.shape[0]] = predictions
 
-        progbar.add(Xb.shape[0], values=[("train loss", loss)])
-        pos += Xb.shape[0]
+            progbar.add(Xb.shape[0], values=[("train loss", loss)])
+            pos += Xb.shape[0]
 
     print('Training loss: ', loss_train.mean())
     print('Training AUC: ', roc_auc_score(y_train_sel,
