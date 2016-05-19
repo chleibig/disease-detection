@@ -19,14 +19,15 @@ from datasets import KaggleDR
 
 batch_size = 4
 n_epoch = 10
-lr_logreg = 0.01
-lr_conv = 0.001
-l2_lambda = 0.001  # entire network
-l1_lambda = 0.001  # only last layer
+lr_logreg = 0.001
+lr_conv = 0.0001
+l2_lambda = 0.0005  # entire network
+l1_lambda = 0.0005  # only last layer
 size = 2048
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
-load_previous_weights = False
+load_previous_weights = True
+best_auc = 0.89435
 
 X = T.tensor4('X')
 y = T.ivector('y')
@@ -109,8 +110,6 @@ predictions_train = np.zeros((len(idx_train), 2))
 loss_val = np.zeros(len(idx_val))
 predictions_val = np.zeros((len(idx_val), 2))
 
-best_auc = 0.0
-
 for epoch in range(n_epoch):
     print('-' * 40)
     print('Epoch', epoch)
@@ -124,7 +123,20 @@ for epoch in range(n_epoch):
     y_train = kdr.y[idx_train[perm]]
     for Xb, yb in kdr.iterate_minibatches(idx_train[perm], batch_size,
                                           shuffle=False):
-        [loss, predictions] = train_iter(Xb, yb)
+	if (pos % 1000) == 0:
+            params_old = lasagne.layers.get_all_param_values(l_out)
+            [loss, predictions] = train_iter(Xb, yb)
+            params_new = lasagne.layers.get_all_param_values(l_out)
+            params_scale = np.array([np.linalg.norm(p_old.ravel())
+                                     for p_old in params_old])
+            updates_scale = np.array([np.linalg.norm((p_new - p_old).ravel())
+                                      for p_new, p_old in
+                                      zip(params_new, params_old)])
+            print('update_scale/param_scale: ',
+                  np.divide(updates_scale, params_scale))
+        else:
+            [loss, predictions] = train_iter(Xb, yb)
+        
         loss_train[pos:pos + Xb.shape[0]] = loss
         predictions_train[pos:pos + Xb.shape[0]] = predictions
 
