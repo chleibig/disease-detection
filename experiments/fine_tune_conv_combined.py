@@ -221,6 +221,9 @@ print("Training took {:.3g} sec.".format(time.time() - start_time))
 # Testing
 ###########################################################################
 
+print("Loading best weights for testing...")
+models.load_weights(l_out, 'best_weights.npz')
+
 print("Testing...")
 
 if dataset == 'KaggleDR':
