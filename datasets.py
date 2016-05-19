@@ -302,11 +302,16 @@ class OptRetina(Dataset):
     """
 
     def __init__(self, path_data=None, filename_targets=None,
-                 preprocessing=KaggleDR.jf_trafo):
+                 preprocessing=KaggleDR.jf_trafo, exclude_path=None):
         self.path_data = path_data
         self.filename_targets = filename_targets
         labels = pd.read_csv(self.filename_targets,
                              dtype={'diseased': np.int32})
+
+        if exclude_path is not None:
+            labels = OptRetina.exclude_samples(exclude_path,
+                                               labels)
+
         self.image_filenames = OptRetina.build_unique_filenames(labels)
         self.extension = '.jpeg'
         # we store all labels
@@ -318,6 +323,19 @@ class OptRetina(Dataset):
         # wich samples we have cached
         self.indices_in_X = None
         self.preprocessing = preprocessing
+
+    @staticmethod
+    def exclude_samples(exclude_path, labels):
+        exclude_filenames = [fn.split('.')[0] for fn in
+                             os.listdir(exclude_path)]
+
+        images = labels.filename.apply(lambda fn: fn.split('.')[0]).values
+        centre_ids = labels.centre_id.values.astype(str)
+        filenames = pd.Series(['_'.join(centre_id_and_image) for
+                               centre_id_and_image in
+                               zip(centre_ids, images)])
+
+        return labels[~filenames.isin(exclude_filenames)]
 
     @staticmethod
     def build_unique_filenames(data_frame):

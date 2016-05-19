@@ -46,8 +46,9 @@ if dataset == 'KaggleDR':
 if dataset == 'optretina':
     ds = OptRetina(path_data='data/optretina/data_JF_' + str(size),
                    filename_targets='data/optretina/OR_diseased_labels.csv',
-                   preprocessing=KaggleDR.jf_trafo)
-
+                   preprocessing=KaggleDR.jf_trafo,
+                   exclude_path='data/optretina/data_JF_' + str(size) +
+                                '_exclude')
 
 untie_biases = defaultdict(lambda: False, {512: True})
 
