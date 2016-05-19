@@ -16,18 +16,19 @@ from keras.utils.generic_utils import Progbar
 
 import models
 from datasets import KaggleDR
+from util import SelectiveSampler
 
-batch_size = 4
+batch_size = 8
 n_epoch = 10
-lr_logreg = 0.001
-lr_conv = 0.0001
-l2_lambda = 0.0005  # entire network
-l1_lambda = 0.0005  # only last layer
-size = 2048
+lr_logreg = 0.005
+lr_conv = 0.005
+l2_lambda = 0.001  # entire network
+l1_lambda = 0.001  # only last layer
+size = 512
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
-load_previous_weights = True
-best_auc = 0.89435
+load_previous_weights = False
+best_auc = 0.0
 
 X = T.tensor4('X')
 y = T.ivector('y')
@@ -70,7 +71,6 @@ loss = loss + l2_penalty + l1_penalty
 def build_updates(network, lr_conv, lr_logreg):
     """Build updates with different learning rates for the conv stack
        and the logistic regression layer
-
     """
 
     params_conv = lasagne.layers.get_all_params(network['conv_combined'],
@@ -92,38 +92,55 @@ loss_det = lasagne.objectives.categorical_crossentropy(predictions_det, y)
 loss_det = loss_det.mean()
 
 updates = build_updates(network, lr_conv, lr_logreg)
+
 train_iter = theano.function([X, y], [loss, predictions], updates=updates)
 eval_iter = theano.function([X, y], [loss_det, predictions_det])
+pred_iter = theano.function([X], predictions_det)
 
 idx_train, idx_val = train_test_split(np.arange(kdr.n_samples), stratify=kdr.y,
                                       test_size=0.2, random_state=1234)
 
+y_train = kdr.y[idx_train]
+N_DISEASED = np.sum(y_train == 1)
+IDX_HEALTHY = np.where(y_train == 0)[0]
+selective_sampler = SelectiveSampler(M=N_DISEASED, y=y_train)
 
 ###########################################################################
 # Training
 ###########################################################################
 start_time = time.time()
 
-loss_train = np.zeros(len(idx_train))
-predictions_train = np.zeros((len(idx_train), 2))
-
-loss_val = np.zeros(len(idx_val))
-predictions_val = np.zeros((len(idx_val), 2))
-
 for epoch in range(n_epoch):
     print('-' * 40)
     print('Epoch', epoch)
     print('-' * 40)
     print("Training...")
+
+    if epoch == 0:
+        print('Select all training data...')
+        selection = np.arange(len(idx_train))
+    else:
+        print('Prediction on diseased images for selective sampling...')
+        progbar = Progbar(len(IDX_HEALTHY))
+        probs_neg = np.zeros((len(IDX_HEALTHY),))
+        pos = 0
+        for Xb, _ in kdr.iterate_minibatches(idx_train[IDX_HEALTHY],
+                                             batch_size,
+                                             shuffle=False):
+            prob_neg = pred_iter(Xb)[:, 0]
+            probs_neg[pos:pos + Xb.shape[0]] = prob_neg
+            progbar.add(Xb.shape[0], values=[("prob_neg", prob_neg.mean())])
+            pos += Xb.shape[0]
+        selection = selective_sampler.sample(probs_neg=probs_neg, shuffle=True)
+
+    progbar = Progbar(len(selection))
+    loss_train = np.zeros((len(selection),))
+    predictions_train = np.zeros((len(selection), 2))
+    y_train_sel = kdr.y[idx_train[selection]]
     pos = 0
-    predictions_train[:] = 0
-    loss_train[:] = 0
-    progbar = Progbar(len(idx_train))
-    perm = np.random.permutation(len(idx_train))
-    y_train = kdr.y[idx_train[perm]]
-    for Xb, yb in kdr.iterate_minibatches(idx_train[perm], batch_size,
+    for Xb, yb in kdr.iterate_minibatches(idx_train[selection], batch_size,
                                           shuffle=False):
-	if (pos % 1000) == 0:
+        if (pos % 40000) == 0:
             params_old = lasagne.layers.get_all_param_values(l_out)
             [loss, predictions] = train_iter(Xb, yb)
             params_new = lasagne.layers.get_all_param_values(l_out)
@@ -136,7 +153,7 @@ for epoch in range(n_epoch):
                   np.divide(updates_scale, params_scale))
         else:
             [loss, predictions] = train_iter(Xb, yb)
-        
+
         loss_train[pos:pos + Xb.shape[0]] = loss
         predictions_train[pos:pos + Xb.shape[0]] = predictions
 
@@ -144,17 +161,18 @@ for epoch in range(n_epoch):
         pos += Xb.shape[0]
 
     print('Training loss: ', loss_train.mean())
-    print('Training AUC: ', roc_auc_score(y_train, predictions_train[:, 1]))
+    print('Training AUC: ', roc_auc_score(y_train_sel,
+                                          predictions_train[:, 1]))
 
     print('-' * 40)
     print('Epoch', epoch)
     print('-' * 40)
     print("Validating...")
-    pos = 0
-    loss_val[:] = 0
-    predictions_val[:] = 0
     progbar = Progbar(len(idx_val))
+    loss_val = np.zeros(len(idx_val))
+    predictions_val = np.zeros((len(idx_val), 2))
     y_val = kdr.y[idx_val]
+    pos = 0
     for Xb, yb in kdr.iterate_minibatches(idx_val, batch_size,
                                           shuffle=False):
         [loss, predictions] = eval_iter(Xb, yb)
@@ -199,3 +217,4 @@ for Xb, yb in kdr_test.iterate_minibatches(np.arange(kdr_test.n_samples),
 
 print('Test loss: ', loss_test.mean())
 print('Test AUC: ', roc_auc_score(kdr_test.y, predictions_test[:, 1]))
+
