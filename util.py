@@ -233,7 +233,8 @@ class SelectiveSampler(object):
         if probs_neg is not None:
             assert len(probs_neg) == self.Xneg.shape[0]
             # step 4
-            weights = np.abs(probs_neg)  # - l_i = - 0
+            # weights should be low for correct examples:
+            weights = np.abs(probs_neg - 1)  # paper: - l_i = - 0?!
             sample_probs = weights / weights.sum()
             # step 5
             Xpos_t = self._random_sample('pos')
