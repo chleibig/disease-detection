@@ -32,17 +32,42 @@ weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 load_previous_weights = False
 best_auc = 0.0
 
-# TODO: consider updating keras as data augmentation code has evolved
-datagen = ImageDataGenerator(featurewise_center=False,
-                             samplewise_center=False,
-                             featurewise_std_normalization=False,
-                             samplewise_std_normalization=False,
-                             zca_whitening=False, # apply ZCA whitening
-                             rotation_range=10., # degrees (0 to 180)
-                             width_shift_range=0.05, # fraction of total width
-                             height_shift_range=0.05, # fraction of tot. height
-                             horizontal_flip=True,
-                             vertical_flip=True)
+AUGMENTATION_PARAMS = {'featurewise_center': False,
+                       'samplewise_center': False,
+                       'featurewise_std_normalization': False,
+                       'samplewise_std_normalization': False,
+                       'zca_whitening': False,
+                       'rotation_range': 180.,
+                       'width_shift_range': 0.05,
+                       'height_shift_range': 0.05,
+                       'shear_range': 0.,
+                       'zoom_range': 0.10,
+                       'channel_shift_range': 0.,
+                       'fill_mode': 'constant',
+                       'cval': 0.,
+                       'horizontal_flip': True,
+                       'vertical_flip': True,
+                       'dim_ordering': 'th'}
+
+NO_AUGMENTATION_PARAMS = {'featurewise_center': False,
+                          'samplewise_center': False,
+                          'featurewise_std_normalization': False,
+                          'samplewise_std_normalization': False,
+                          'zca_whitening': False,
+                          'rotation_range': 0.,
+                          'width_shift_range': 0.,
+                          'height_shift_range': 0.,
+                          'shear_range': 0.,
+                          'zoom_range': 0.,
+                          'channel_shift_range': 0.,
+                          'fill_mode': 'nearest',
+                          'cval': 0.,
+                          'horizontal_flip': False,
+                          'vertical_flip': False,
+                          'dim_ordering': 'th'}
+
+datagen_aug = ImageDataGenerator(**AUGMENTATION_PARAMS)
+datagen_no_aug = ImageDataGenerator(**NO_AUGMENTATION_PARAMS)
 
 X = T.tensor4('X')
 y = T.ivector('y')
@@ -172,16 +197,27 @@ for epoch in range(n_epoch):
     predictions_train = np.zeros((len(selection), 2))
     y_train_sel = ds.y[idx_train[selection]]
     pos = 0
-    for Xb, yb in ds.iterate_minibatches(idx_train[selection], batch_size=100,
-                                         shuffle=False):
-        # real-time data augmentation
-        for Xb, yb in datagen.flow(Xb, yb,
-                               batch_size=batch_size,
-                               shuffle=False,
-                               seed=None,
-                               save_to_dir=None,
-                               save_prefix="",
-                               save_format="jpeg"):
+    bs_outer = batch_size * 10
+    for Xb_outer, yb_outer in ds.iterate_minibatches(idx_train[selection],
+                                                     batch_size=bs_outer,
+                                                     shuffle=False):
+        augment_data = np.random.randint(2)  # augment 50 % of the data
+        if augment_data:
+            datagen = datagen_aug
+        else:
+            datagen = datagen_no_aug
+
+        n_samples_inner = 0
+        for Xb, yb in datagen.flow(Xb_outer, yb_outer,
+                                   batch_size=batch_size,
+                                   shuffle=False,
+                                   seed=None,
+                                   save_to_dir=None):
+            Xb = Xb.astype('float32', copy=False)
+            n_samples_inner += Xb.shape[0]
+            if n_samples_inner > Xb_outer.shape[0]:
+                Warning('Generated more samples than we provided as input.')
+
             if (pos % 40000) == 0:
                 params_old = lasagne.layers.get_all_param_values(l_out)
                 [loss, predictions] = train_iter(Xb, yb)
@@ -202,6 +238,9 @@ for epoch in range(n_epoch):
 
             progbar.add(Xb.shape[0], values=[("train loss", loss)])
             pos += Xb.shape[0]
+
+            if n_samples_inner == Xb_outer.shape[0]:
+                break # datagen.flow loop is an infinite generator
 
     print('Training loss: ', loss_train.mean())
     print('Training AUC: ', roc_auc_score(y_train_sel,
