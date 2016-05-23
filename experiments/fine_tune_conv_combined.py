@@ -21,8 +21,8 @@ from util import SelectiveSampler
 
 batch_size = 32
 n_epoch = 5
-lr_logreg = 0.0005
-lr_conv = 0.0005
+lr_logreg = 0.0001
+lr_conv = 0.0001
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
 size = 512
@@ -30,7 +30,7 @@ dataset = 'KaggleDR'
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 load_previous_weights = True
-best_auc = 0.9316
+best_auc = 0.93365
 
 AUGMENTATION_PARAMS = {'featurewise_center': False,
                        'samplewise_center': False,
