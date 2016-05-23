@@ -19,18 +19,18 @@ import models
 from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
 
-batch_size = 10
-n_epoch = 10
-lr_logreg = 0.005
-lr_conv = 0.005
+batch_size = 32
+n_epoch = 5
+lr_logreg = 0.001
+lr_conv = 0.001
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
 size = 512
-dataset = 'optretina'
+dataset = 'KaggleDR'
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
-load_previous_weights = False
-best_auc = 0.0
+load_previous_weights = True
+best_auc = 0.92229
 
 AUGMENTATION_PARAMS = {'featurewise_center': False,
                        'samplewise_center': False,
@@ -74,11 +74,11 @@ y = T.ivector('y')
 
 if dataset == 'KaggleDR':
     ds = KaggleDR(path_data='data/kaggle_dr/train_JF_' + str(size),
-                  filename_targets='data/kaggle_dr/trainLabels_bin.csv',
+                  filename_targets='data/kaggle_dr/trainLabels_01vs234.csv',
                   preprocessing=KaggleDR.jf_trafo)
     ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_' + str(size),
                        filename_targets='data/kaggle_dr/'
-                                        'retinopathy_solution_bin.csv',
+                                        'retinopathy_solution_01vs234.csv',
                        preprocessing=KaggleDR.jf_trafo)
 
 if dataset == 'optretina':
@@ -175,22 +175,22 @@ for epoch in range(n_epoch):
     print('-' * 40)
     print("Training...")
 
-    # if epoch == 0:
-    print('Select all training data...')
-    selection = np.arange(len(idx_train))
-    # else:
-    #     print('Prediction on diseased images for selective sampling...')
-    #     progbar = Progbar(len(IDX_HEALTHY))
-    #     probs_neg = np.zeros((len(IDX_HEALTHY),))
-    #     pos = 0
-    #     for Xb, _ in ds.iterate_minibatches(idx_train[IDX_HEALTHY],
-    #                                         batch_size,
-    #                                         shuffle=False):
-    #         prob_neg = pred_iter(Xb)[:, 0]
-    #         probs_neg[pos:pos + Xb.shape[0]] = prob_neg
-    #         progbar.add(Xb.shape[0], values=[("prob_neg", prob_neg.mean())])
-    #         pos += Xb.shape[0]
-    #     selection = selective_sampler.sample(probs_neg=probs_neg, shuffle=True)
+    if epoch == 0:
+    	print('Select all training data...')
+    	selection = np.arange(len(idx_train))
+    else:
+         print('Prediction on diseased images for selective sampling...')
+         progbar = Progbar(len(IDX_HEALTHY))
+         probs_neg = np.zeros((len(IDX_HEALTHY),))
+         pos = 0
+         for Xb, _ in ds.iterate_minibatches(idx_train[IDX_HEALTHY],
+                                             batch_size,
+                                             shuffle=False):
+             prob_neg = pred_iter(Xb)[:, 0]
+             probs_neg[pos:pos + Xb.shape[0]] = prob_neg
+             progbar.add(Xb.shape[0], values=[("prob_neg", prob_neg.mean())])
+             pos += Xb.shape[0]
+         selection = selective_sampler.sample(probs_neg=probs_neg, shuffle=True)
 
     progbar = Progbar(len(selection))
     loss_train = np.zeros((len(selection),))
