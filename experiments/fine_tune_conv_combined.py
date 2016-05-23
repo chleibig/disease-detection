@@ -21,8 +21,8 @@ from util import SelectiveSampler
 
 batch_size = 32
 n_epoch = 5
-lr_logreg = 0.001
-lr_conv = 0.001
+lr_logreg = 0.0005
+lr_conv = 0.0005
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
 size = 512
@@ -30,7 +30,7 @@ dataset = 'KaggleDR'
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 load_previous_weights = True
-best_auc = 0.92229
+best_auc = 0.9316
 
 AUGMENTATION_PARAMS = {'featurewise_center': False,
                        'samplewise_center': False,
@@ -175,9 +175,10 @@ for epoch in range(n_epoch):
     print('-' * 40)
     print("Training...")
 
-    if epoch == 0:
+    if True:
     	print('Select all training data...')
     	selection = np.arange(len(idx_train))
+	np.random.shuffle(selection)
     else:
          print('Prediction on diseased images for selective sampling...')
          progbar = Progbar(len(IDX_HEALTHY))
