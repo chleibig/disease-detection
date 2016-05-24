@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 
 from collections import defaultdict
+import itertools
 import time
 import numpy as np
 import theano
@@ -21,19 +22,19 @@ from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
 
 batch_size = 32
-n_epoch = 10
+n_epoch = 12
 lr_logreg = 0.005
 lr_conv = 0.005
-lr_schedule = {0: 0.0001, 1: 0.0001}
-change_every = 5
+lr_schedule = {0: 0.005, 1: 0.001, 2: 0.0005, 3: 0.0001}
+change_every = 3
 l2_lambda = 0.001  # entire network
-l1_lambda = 0.000  # only last layer
+l1_lambda = 0.001  # only last layer
 size = 512
 dataset = 'KaggleDR'
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
-load_previous_weights = True
-best_auc = 0.93244
+load_previous_weights = False
+best_auc = 0.0
 
 AUGMENTATION_PARAMS = {'featurewise_center': False,
                        'samplewise_center': False,
@@ -98,11 +99,27 @@ network = models.jeffrey_df(input_var=X, width=size, height=size,
                             untie_biases=untie_biases[size])
 
 n_classes = len(np.unique(ds.y))
-network['fc1'] = DenseLayer(network['conv_combined'], num_units=1024,
-                            nonlinearity=lasagne.nonlinearities.elu)
-network['fc2'] = DenseLayer(network['fc1'], num_units=512,
-                            nonlinearity=lasagne.nonlinearities.elu)
-network['logreg'] = DenseLayer(network['fc2'],
+
+######################################################
+# Construct view on network
+######################################################
+# TODO: write an expression layer that computes the
+#       correlation between feature maps
+
+selection = ['1', '3', '4', '6', '7', '9', '10', '11', 
+             '12', '14', '15', '16', '17', '18']
+mean_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
+                                                       pool_function=T.mean)
+                        for k in selection]
+max_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
+                                                      pool_function=T.max)
+                       for k in selection]
+
+pooled_features = list(itertools.chain(mean_pooled_features, max_pooled_features))
+network['conv_combined'] = lasagne.layers.ConcatLayer(pooled_features, axis=1)
+
+
+network['logreg'] = DenseLayer(network['conv_combined'],
                                num_units=n_classes,
                                nonlinearity=lasagne.nonlinearities.softmax)
 
