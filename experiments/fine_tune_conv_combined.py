@@ -7,6 +7,7 @@ import theano
 import theano.tensor as T
 import lasagne
 from lasagne.layers import DenseLayer
+from lasagne.nonlinearities import LeakyRectify
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.regularization import regularize_layer_params, l1
 from sklearn.cross_validation import train_test_split
@@ -20,17 +21,19 @@ from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
 
 batch_size = 32
-n_epoch = 5
-lr_logreg = 0.0001
-lr_conv = 0.0001
+n_epoch = 10
+lr_logreg = 0.005
+lr_conv = 0.005
+lr_schedule = {0: 0.0001, 1: 0.0001}
+change_every = 5
 l2_lambda = 0.001  # entire network
-l1_lambda = 0.001  # only last layer
+l1_lambda = 0.000  # only last layer
 size = 512
 dataset = 'KaggleDR'
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 load_previous_weights = True
-best_auc = 0.93365
+best_auc = 0.93244
 
 AUGMENTATION_PARAMS = {'featurewise_center': False,
                        'samplewise_center': False,
@@ -95,7 +98,11 @@ network = models.jeffrey_df(input_var=X, width=size, height=size,
                             untie_biases=untie_biases[size])
 
 n_classes = len(np.unique(ds.y))
-network['logreg'] = DenseLayer(network['conv_combined'],
+network['fc1'] = DenseLayer(network['conv_combined'], num_units=1024,
+                            nonlinearity=lasagne.nonlinearities.elu)
+network['fc2'] = DenseLayer(network['fc1'], num_units=512,
+                            nonlinearity=lasagne.nonlinearities.elu)
+network['logreg'] = DenseLayer(network['fc2'],
                                num_units=n_classes,
                                nonlinearity=lasagne.nonlinearities.softmax)
 
@@ -115,32 +122,40 @@ l1_penalty = l1_lambda * regularize_layer_params(l_out, l1)
 loss = loss + l2_penalty + l1_penalty
 
 
-def build_updates(network, lr_conv, lr_logreg):
-    """Build updates with different learning rates for the conv stack
-       and the logistic regression layer
-    """
-
-    params_conv = lasagne.layers.get_all_params(network['conv_combined'],
-                                                trainable=True)
-    updates_conv = lasagne.updates.sgd(loss, params_conv,
-                                       learning_rate=lr_conv)
-    params_logreg = network['logreg'].get_params(trainable=True)
-    updates_logreg = lasagne.updates.sgd(loss, params_logreg,
-                                         learning_rate=lr_logreg)
-    updates = updates_conv
-    for k, v in updates_logreg.items():
-        updates[k] = v
-
-    return lasagne.updates.apply_nesterov_momentum(updates, momentum=0.9)
+#def build_updates(network, lr_conv, lr_logreg):
+#    """Build updates with different learning rates for the conv stack
+#       and the logistic regression layer
+#    """
+#
+#    params_conv = lasagne.layers.get_all_params(network['conv_combined'],
+#                                                trainable=True)
+#    updates_conv = lasagne.updates.sgd(loss, params_conv,
+#                                       learning_rate=lr_conv)
+#    params_logreg = network['logreg'].get_params(trainable=True)
+#    updates_logreg = lasagne.updates.sgd(loss, params_logreg,
+#                                         learning_rate=lr_logreg)
+#    updates = updates_conv
+#    for k, v in updates_logreg.items():
+#        updates[k] = v
+#
+#    return lasagne.updates.apply_nesterov_momentum(updates, momentum=0.9)
 
 
 predictions_det = lasagne.layers.get_output(l_out, deterministic=True)
 loss_det = lasagne.objectives.categorical_crossentropy(predictions_det, y)
 loss_det = loss_det.mean()
 
-updates = build_updates(network, lr_conv, lr_logreg)
+#updates = build_updates(network, lr_conv, lr_logreg)
+params = lasagne.layers.get_all_params(network['logreg'], 
+                                       trainable=True)
+#updates = lasagne.updates.nesterov_momentum(loss, params,
+#                                            learning_rate=lr_logreg)
+train_iter = {k: theano.function([X, y], [loss, predictions],
+                                 updates=lasagne.updates.nesterov_momentum(loss, params,
+                                                                           learning_rate=lr_schedule[k]))
+              for k in lr_schedule.keys()}
 
-train_iter = theano.function([X, y], [loss, predictions], updates=updates)
+#train_iter = theano.function([X, y], [loss, predictions], updates=updates)
 eval_iter = theano.function([X, y], [loss_det, predictions_det])
 pred_iter = theano.function([X], predictions_det)
 
@@ -221,7 +236,7 @@ for epoch in range(n_epoch):
 
             if (pos % 40000) == 0:
                 params_old = lasagne.layers.get_all_param_values(l_out)
-                [loss, predictions] = train_iter(Xb, yb)
+                [loss, predictions] = train_iter[epoch//change_every](Xb, yb)
                 params_new = lasagne.layers.get_all_param_values(l_out)
                 params_scale = np.array([np.linalg.norm(p_old.ravel())
                                          for p_old in params_old])
@@ -232,7 +247,7 @@ for epoch in range(n_epoch):
                 print('update_scale/param_scale: ',
                       np.divide(updates_scale, params_scale))
             else:
-                [loss, predictions] = train_iter(Xb, yb)
+                [loss, predictions] = train_iter[epoch//change_every](Xb, yb)
 
             loss_train[pos:pos + Xb.shape[0]] = loss
             predictions_train[pos:pos + Xb.shape[0]] = predictions
