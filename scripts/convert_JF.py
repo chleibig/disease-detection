@@ -19,17 +19,17 @@ from multiprocessing.pool import Pool
 import click
 import numpy as np
 from PIL import Image
+import cv2
 
 import pandas as pd
-from datasets import OptRetina
 
 
-def convert(fname, crop_size):
+def convert(fname, crop_size, enhance_contrast=False):
     """Refactored from JF's generators.load_image_and_process"""
     im = Image.open(fname, mode='r')
 
     assert len(np.shape(im)) == 3, "Shape of image {} unexpected, " \
-                                       "maybe it's grayscale".format(fname)
+        "maybe it's grayscale".format(fname)
 
     w, h = im.size
 
@@ -56,12 +56,54 @@ def convert(fname, crop_size):
     converted = converted.resize((crop_size, crop_size),
                                  resample=Image.BILINEAR)
 
+    if enhance_contrast:
+        im_ce_as_array = contrast_enhance(np.asarray(converted),
+                                          radius=crop_size // 2)
+        converted = Image.fromarray(im_ce_as_array.astype(np.uint8))
+
     return converted
+
+
+def contrast_enhance(im, radius):
+    """Subtract local average color and map local average to 50% gray
+
+    Parameters
+    ==========
+
+    im: array of shape (height, width, 3)
+    radius: int
+        for square images a good choice is size/2
+
+    Returns
+    =======
+
+    im_ce: contrast enhanced image as array of shape (height, width, 3)
+
+    Reference
+    =========
+
+    B. Graham, "Kaggle diabetic retinopathy detection competition report",
+        University of Warwick, Tech. Rep., 2015
+
+    https://github.com/btgraham/SparseConvNet/blob/kaggle_Diabetic_Retinopathy_competition/Data/kaggleDiabeticRetinopathy/preprocessImages.py
+
+    """
+
+    radius = int(radius)
+    b = np.zeros(im.shape)
+    cv2.circle(b, (radius, radius), int(radius * 0.9),
+               (1, 1, 1), -1, 8, 0)
+    im_ce = cv2.addWeighted(im, 4,
+                            cv2.GaussianBlur(im, (0, 0), radius / 30),
+                            -4, 128) * b + 128 * (1 - b)
+    return im_ce
+
 
 def get_convert_fname(fname, extension, directory, convert_directory):
     source_extension = fname.split('.')[-1]
     return fname.replace(source_extension, extension).replace(directory,
-                                                    convert_directory)
+                                                            convert_directory)
+
 
 def create_dirs(paths):
     for p in paths:
@@ -70,14 +112,16 @@ def create_dirs(paths):
         except OSError:
             pass
 
+
 def process(args):
     fun, arg = args
-    directory, convert_directory, fname, crop_size, extension = arg
-    convert_fname = get_convert_fname(fname, extension, directory, 
+    directory, convert_directory, fname, crop_size, \
+        extension, enhance_contrast = arg
+    convert_fname = get_convert_fname(fname, extension, directory,
                                       convert_directory)
     if not os.path.exists(convert_fname):
-        img = fun(fname, crop_size)
-        save(img, convert_fname) 
+        img = fun(fname, crop_size, enhance_contrast)
+        save(img, convert_fname)
 
 
 def save(img, fname):
@@ -99,11 +143,14 @@ def save(img, fname):
               help="Filetype of converted images.")
 @click.option('--n_proc', default=2, show_default=True,
               help="Number of processes for parallelization.")
+@click.option('--enhance_contrast', default=False, show_default=True,
+              help="Whether to use Benjamin Graham's contrast enhancement.")
 def main(directory, convert_directory, filename_parts_or, crop_size,
-         extension, n_proc):
+         extension, n_proc, enhance_contrast):
     """Image preprocessing according to Jeffrey de Fauw:
        Crop and resize images, save with desired extension.
     """
+    from datasets import OptRetina
 
     try:
         os.mkdir(convert_directory)
@@ -135,8 +182,8 @@ def main(directory, convert_directory, filename_parts_or, crop_size,
     args = []
 
     for f in filenames:
-        args.append((convert, (directory, convert_directory, f, crop_size, 
-                               extension)))
+        args.append((convert, (directory, convert_directory, f, crop_size,
+                               extension, enhance_contrast)))
 
     for i in range(batches):
         print("batch {:>2} / {}".format(i + 1, batches))
