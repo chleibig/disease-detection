@@ -22,11 +22,11 @@ from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
 
 batch_size = 32
-n_epoch = 12
+n_epoch = 30
 lr_logreg = 0.005
 lr_conv = 0.005
-lr_schedule = {0: 0.005, 1: 0.001, 2: 0.0005, 3: 0.0001}
-change_every = 3
+lr_schedule = {0: 0.005, 1: 0.001, 2: 0.0005, 3: 0.0001, 4: 0.00005, 5: 0.000001}
+change_every = 5
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
 size = 512
@@ -77,10 +77,10 @@ X = T.tensor4('X')
 y = T.ivector('y')
 
 if dataset == 'KaggleDR':
-    ds = KaggleDR(path_data='data/kaggle_dr/train_JF_' + str(size),
+    ds = KaggleDR(path_data='data/kaggle_dr/train_JF_BG_' + str(size),
                   filename_targets='data/kaggle_dr/trainLabels_01vs234.csv',
                   preprocessing=KaggleDR.jf_trafo)
-    ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_' + str(size),
+    ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_BG_' + str(size),
                        filename_targets='data/kaggle_dr/'
                                         'retinopathy_solution_01vs234.csv',
                        preprocessing=KaggleDR.jf_trafo)
@@ -106,17 +106,17 @@ n_classes = len(np.unique(ds.y))
 # TODO: write an expression layer that computes the
 #       correlation between feature maps
 
-selection = ['1', '3', '4', '6', '7', '9', '10', '11', 
-             '12', '14', '15', '16', '17', '18']
-mean_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
-                                                       pool_function=T.mean)
-                        for k in selection]
-max_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
-                                                      pool_function=T.max)
-                       for k in selection]
-
-pooled_features = list(itertools.chain(mean_pooled_features, max_pooled_features))
-network['conv_combined'] = lasagne.layers.ConcatLayer(pooled_features, axis=1)
+#selection = ['1', '3', '4', '6', '7', '9', '10', '11', 
+#             '12', '14', '15', '16', '17', '18']
+#mean_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
+#                                                       pool_function=T.mean)
+#                        for k in selection]
+#max_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
+#                                                      pool_function=T.max)
+#                       for k in selection]
+#
+#pooled_features = list(itertools.chain(mean_pooled_features, max_pooled_features))
+#network['conv_combined'] = lasagne.layers.ConcatLayer(pooled_features, axis=1)
 
 
 network['logreg'] = DenseLayer(network['conv_combined'],
