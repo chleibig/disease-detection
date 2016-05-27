@@ -1,6 +1,7 @@
 from __future__ import division
 import numpy as np
 import bokeh.plotting as bp
+import bokeh.client as bc
 import plotting
 import seaborn as sns
 import keras.callbacks
@@ -52,42 +53,69 @@ def quadratic_weighted_kappa(labels_rater_1, labels_rater_2, num_classes):
 
 
 class Progplot(object):
-    """Progression plot that monitors training of neural network"""
+    """Dynamically monitor training of neural network
 
-    def __init__(self, n_x, x_axis_label):
+    Usage
+    =====
+
+    prior to running code that uses the Progplot class, start a bokeh-server
+    in a separate terminal running:
+
+    bokeh serve
+
+    The plot is then automatically shown in a new browser window and updated
+    every epoch. For remote access, use
+        ssh -L [bind_address:]port:host:hostport]
+
+    """
+
+    def __init__(self, n_x, x_axis_label, names, show=True):
         """
         Parameters
         ----------
         n_x : int
             total number of expected samples in x-direction
+        x_axis_label : string
+        names : list of strings
+            names of the quantities to be monitored
+        show : bool (True by default)
+            if True, browser window is automatically opened and dynamically
+            updated
 
         """
 
         self.n_x = n_x
-        self.y = {}
         self.seen_so_far = 0
-        self.output_file = bp.output_file("progplot.html",
-                                          title="Progression plot")
         self.p = bp.figure(title="Monitor neural network training",
-                           x_axis_label=x_axis_label)
+                           x_axis_label=x_axis_label,
+                           x_range=[0, n_x])
+        self.y = {k: np.zeros(n_x) for k in names}
+        self.x = np.arange(n_x)
+        # Add one line for each tracked quantity:
+        self.l = {}
+        colors = sns.color_palette(n_colors=len(names)).as_hex()
+        for i, k in enumerate(names):
+            self.l[k] = self.p.line(x=[], y=[],
+                                    line_color=colors[i], legend=k,
+                                    line_width=2)
+        self.curdoc = bp.curdoc()
+        # This line is crucial as it adds the necessary on change callbacks:
+        self.curdoc.add_root(self.p)
+        self.session = bc.push_session(self.curdoc, session_id='progplot')
+        if show:
+            self.session.show()
+        self.show = show
 
-    def save(self):
-        """Add one line for each tracked quantity"""
-        x = np.arange(self.n_x)
-        n_lines = len(self.y.keys())
-        colors = sns.color_palette(n_colors=n_lines).as_hex()
-        for i, k in enumerate(sorted(self.y.keys())):
-            self.p.line(x, self.y[k], line_color=colors[i], legend=k,
-                        line_width=2)
-
+    def save(self, filename):
+        self.output_file = bp.output_file(filename,
+                                          title="Progression plot")
         bp.save(self.p, self.output_file)
 
     def show(self):
-        bp.show(self.p)
+        self.session.show()
 
     def update(self, current, values=[]):
         """
-
         Parameters
         ----------
         current: int
@@ -97,10 +125,12 @@ class Progplot(object):
         """
 
         for k, v in values:
-            if k not in self.y.keys():
-                self.y[k] = np.zeros(self.n_x)
+            if k not in self.l.keys():
+                raise KeyError('Name is not known to progplot instance.')
 
             self.y[k][current] = v
+            self.l[k].data_source.data['x'] = self.x[:current]
+            self.l[k].data_source.data['y'] = self.y[k][:current]
 
         self.seen_so_far = current
 
