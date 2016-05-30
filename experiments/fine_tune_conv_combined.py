@@ -8,7 +8,6 @@ import theano
 import theano.tensor as T
 import lasagne
 from lasagne.layers import DenseLayer
-from lasagne.nonlinearities import LeakyRectify
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.regularization import regularize_layer_params, l1
 from sklearn.cross_validation import train_test_split
@@ -20,8 +19,9 @@ from keras.preprocessing.image import ImageDataGenerator
 import models
 from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
+from util import Progplot
 
-batch_size = 32
+batch_size = 2
 n_epoch = 30
 lr_logreg = 0.005
 lr_conv = 0.005
@@ -32,7 +32,7 @@ l1_lambda = 0.001  # only last layer
 size = 512
 dataset = 'KaggleDR'
 
-weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
+weights_init = 'models/vgg19/vgg19_normalized.pkl'
 load_previous_weights = False
 best_auc = 0.0
 
@@ -79,24 +79,23 @@ y = T.ivector('y')
 if dataset == 'KaggleDR':
     ds = KaggleDR(path_data='data/kaggle_dr/train_JF_BG_' + str(size),
                   filename_targets='data/kaggle_dr/trainLabels_01vs234.csv',
-                  preprocessing=KaggleDR.jf_trafo)
+                  preprocessing=KaggleDR.standard_normalize)
     ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_BG_' + str(size),
                        filename_targets='data/kaggle_dr/'
                                         'retinopathy_solution_01vs234.csv',
-                       preprocessing=KaggleDR.jf_trafo)
+                       preprocessing=KaggleDR.standard_normalize)
 
 if dataset == 'optretina':
     ds = OptRetina(path_data='data/optretina/data_JF_' + str(size),
                    filename_targets='data/optretina/OR_diseased_labels.csv',
-                   preprocessing=KaggleDR.jf_trafo,
+                   preprocessing=KaggleDR.standard_normalize,
                    exclude_path='data/optretina/data_JF_' + str(size) +
                                 '_exclude')
 
 untie_biases = defaultdict(lambda: False, {512: True})
 
-network = models.jeffrey_df(input_var=X, width=size, height=size,
-                            filename=weights_init,
-                            untie_biases=untie_biases[size])
+network = models.vgg19(input_var=X, height=size, width=size)
+models.load_weights(network['pool5'], weights_init)
 
 n_classes = len(np.unique(ds.y))
 
@@ -106,17 +105,13 @@ n_classes = len(np.unique(ds.y))
 # TODO: write an expression layer that computes the
 #       correlation between feature maps
 
-#selection = ['1', '3', '4', '6', '7', '9', '10', '11', 
-#             '12', '14', '15', '16', '17', '18']
-#mean_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
-#                                                       pool_function=T.mean)
-#                        for k in selection]
-#max_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
-#                                                      pool_function=T.max)
-#                       for k in selection]
-#
-#pooled_features = list(itertools.chain(mean_pooled_features, max_pooled_features))
-#network['conv_combined'] = lasagne.layers.ConcatLayer(pooled_features, axis=1)
+selection = ['pool1', 'pool2', 'pool3', 'pool4', 'pool5']
+
+mean_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
+                                                       pool_function=T.mean)
+                        for k in selection]
+
+network['conv_combined'] = lasagne.layers.ConcatLayer(pooled_features, axis=1)
 
 
 network['logreg'] = DenseLayer(network['conv_combined'],
@@ -168,8 +163,9 @@ params = lasagne.layers.get_all_params(network['logreg'],
 #updates = lasagne.updates.nesterov_momentum(loss, params,
 #                                            learning_rate=lr_logreg)
 train_iter = {k: theano.function([X, y], [loss, predictions],
-                                 updates=lasagne.updates.nesterov_momentum(loss, params,
-                                                                           learning_rate=lr_schedule[k]))
+                                 updates=lasagne.updates.nesterov_momentum(
+                                    loss, params,
+                                    learning_rate=lr_schedule[k]))
               for k in lr_schedule.keys()}
 
 #train_iter = theano.function([X, y], [loss, predictions], updates=updates)
@@ -200,6 +196,9 @@ selective_sampler = SelectiveSampler(M=N_DISEASED, y=y_train)
 # Training
 ###########################################################################
 start_time = time.time()
+progplot = Progplot(n_epoch, "epochs (batch_size " + str(batch_size) + ")",
+                    names=['loss (train)', 'loss (val.)',
+                           'AUC (train)', 'AUC (val.)'])
 
 for epoch in range(n_epoch):
     print('-' * 40)
@@ -208,22 +207,22 @@ for epoch in range(n_epoch):
     print("Training...")
 
     if True:
-    	print('Select all training data...')
-    	selection = np.arange(len(idx_train))
-	np.random.shuffle(selection)
+        print('Select all training data...')
+        selection = np.arange(len(idx_train))
+        np.random.shuffle(selection)
     else:
-         print('Prediction on diseased images for selective sampling...')
-         progbar = Progbar(len(IDX_HEALTHY))
-         probs_neg = np.zeros((len(IDX_HEALTHY),))
-         pos = 0
-         for Xb, _ in ds.iterate_minibatches(idx_train[IDX_HEALTHY],
-                                             batch_size,
-                                             shuffle=False):
-             prob_neg = pred_iter(Xb)[:, 0]
-             probs_neg[pos:pos + Xb.shape[0]] = prob_neg
-             progbar.add(Xb.shape[0], values=[("prob_neg", prob_neg.mean())])
-             pos += Xb.shape[0]
-         selection = selective_sampler.sample(probs_neg=probs_neg, shuffle=True)
+        print('Prediction on diseased images for selective sampling...')
+        progbar = Progbar(len(IDX_HEALTHY))
+        probs_neg = np.zeros((len(IDX_HEALTHY),))
+        pos = 0
+        for Xb, _ in ds.iterate_minibatches(idx_train[IDX_HEALTHY],
+                                            batch_size,
+                                            shuffle=False):
+            prob_neg = pred_iter(Xb)[:, 0]
+            probs_neg[pos:pos + Xb.shape[0]] = prob_neg
+            progbar.add(Xb.shape[0], values=[("prob_neg", prob_neg.mean())])
+            pos += Xb.shape[0]
+        selection = selective_sampler.sample(probs_neg=probs_neg, shuffle=True)
 
     progbar = Progbar(len(selection))
     loss_train = np.zeros((len(selection),))
@@ -276,8 +275,8 @@ for epoch in range(n_epoch):
                 break # datagen.flow loop is an infinite generator
 
     print('Training loss: ', loss_train.mean())
-    print('Training AUC: ', roc_auc_score(y_train_sel,
-                                          predictions_train[:, 1]))
+    auc_train = roc_auc_score(y_train_sel, predictions_train[:, 1])
+    print('Training AUC: ', auc_train)
 
     print('-' * 40)
     print('Epoch', epoch)
@@ -301,6 +300,11 @@ for epoch in range(n_epoch):
 
     print('Validation loss: ', loss_val.mean())
     print('Validation AUC: ', auc_val)
+
+    progplot.add(values=[("loss (train)", loss_train.mean()),
+                         ("AUC (train)", auc_train),
+                         ("loss (val.)", loss_val.mean()),
+                         ("AUC (val.)", auc_val)])
 
     if auc_val > best_auc:
         best_auc = auc_val
