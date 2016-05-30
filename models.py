@@ -21,7 +21,8 @@ from lasagne.layers import DimshuffleLayer
 import theano.tensor as T
 
 
-def vgg19(input_var=None, filename=None, n_classes=1000, p=None):
+def vgg19(input_var=None, filename=None, n_classes=1000, p=None,
+          height=224, width=224):
     """Setup network structure for VGG19 and optionally load pretrained
     weights
 
@@ -36,6 +37,10 @@ def vgg19(input_var=None, filename=None, n_classes=1000, p=None):
         default 1000 for weights trained on ImageNet
     p : float [0,1] (default: 'None')
         if p is not none, we use dropout layers with probability p
+    width : Optional[int]
+        image width
+    height : Optional[int]
+        image height
 
     Returns
     -------
@@ -49,13 +54,18 @@ def vgg19(input_var=None, filename=None, n_classes=1000, p=None):
         This function is based on:
             https://gist.github.com/ksimonyan/3785162f95cd2d5fee77
         License: non-commercial use only
-        Download pretrained weights from:
+        Download (all) pretrained weights from:
         https://s3.amazonaws.com/lasagne/recipes/pretrained/imagenet/vgg19.pkl
+
+        Normalized weights of layers up to and including pool5 only can be 
+        obtained from:
+        https://s3.amazonaws.com/lasagne/recipes/pretrained/imagenet/vgg19_normalized.pkl
+        (original source: https://bethgelab.org/deepneuralart/)
 
     """
 
     net = {}
-    net['input'] = InputLayer((None, 3, 224, 224), input_var=input_var)
+    net['input'] = InputLayer((None, 3, height, width), input_var=input_var)
     net['conv1_1'] = ConvLayer(net['input'], 64, 3, pad=1)
     net['conv1_2'] = ConvLayer(net['conv1_1'], 64, 3, pad=1)
     net['pool1'] = PoolLayer(net['conv1_2'], 2)
