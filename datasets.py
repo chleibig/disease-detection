@@ -190,7 +190,7 @@ class KaggleDR(Dataset):
     def jf_trafo(image):
         """Apply Jeffrey de Fauw's transformation"""
 
-        #Recovered from model_dump['data_loader_params'].zmuv_mean
+        # Recovered from model_dump['data_loader_params'].zmuv_mean
         # and *.zmuv_std of 2015_07_17_123003.pkl in Jeffrey's repo:
         ZMUV_MEAN = 0.04166667
         ZMUV_STD = 0.20412415
@@ -199,10 +199,13 @@ class KaggleDR(Dataset):
         return (image - ZMUV_MEAN) / (0.05 + ZMUV_STD)
 
     def __init__(self, path_data=None, filename_targets=None,
-                 preprocessing=standard_normalize):
+                 preprocessing=standard_normalize,
+                 require_both_eyes_same_label=False):
         self.path_data = path_data
         self.filename_targets = filename_targets
-        labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
+        labels = pd.read_csv(filename_targets, dtype={'level': np.int32})
+        if require_both_eyes_same_label:
+            labels = KaggleDR.contralateral_agreement(labels)
         self.image_filenames = labels['image']
         # we store all labels
         self._y = np.array(labels['level'])
@@ -213,6 +216,34 @@ class KaggleDR(Dataset):
         # wich samples we have cached
         self.indices_in_X = None
         self.preprocessing = preprocessing
+
+    @staticmethod
+    def contralateral_agreement(df):
+        """Get only the samples for which the contralateral image had been
+           assigned the same label
+
+        Parameters
+        ==========
+        df: pandas data frame
+            all samples
+
+        Returns
+        =======
+
+        df: pandas data frame
+            just the samples with contralateral label agreement
+
+        """
+
+        left = df.image.str.contains(r'\d+_left')
+        right = df.image.str.contains(r'\d+_right')
+        df[left].level == df[right].level
+        accepted_patients = (df[left].level == df[right].level).values
+        accepted_images_left = df[left].image[accepted_patients]
+        accepted_images_right = df[right].image[accepted_patients]
+        accepted_images = pd.concat((accepted_images_left,
+                                     accepted_images_right))
+        return df[df.image.isin(accepted_images)]
 
     def load_image(self, filename):
         """
