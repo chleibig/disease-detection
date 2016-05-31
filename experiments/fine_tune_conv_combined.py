@@ -1,7 +1,6 @@
 from __future__ import print_function, division
 
 from collections import defaultdict
-import itertools
 import time
 import numpy as np
 import theano
@@ -21,18 +20,19 @@ from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
 from util import Progplot
 
-batch_size = 2
+batch_size = 10
 n_epoch = 30
 lr_logreg = 0.005
 lr_conv = 0.005
-lr_schedule = {0: 0.005, 1: 0.001, 2: 0.0005, 3: 0.0001, 4: 0.00005, 5: 0.000001}
+lr_schedule = {0: 0.005, 1: 0.001, 2: 0.0005, 3: 0.0001, 4: 0.00005,
+               5: 0.000001}
 change_every = 5
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
 size = 512
 dataset = 'KaggleDR'
 
-weights_init = 'models/vgg19/vgg19_normalized.pkl'
+weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 load_previous_weights = False
 best_auc = 0.0
 
@@ -79,11 +79,13 @@ y = T.ivector('y')
 if dataset == 'KaggleDR':
     ds = KaggleDR(path_data='data/kaggle_dr/train_JF_BG_' + str(size),
                   filename_targets='data/kaggle_dr/trainLabels_01vs234.csv',
-                  preprocessing=KaggleDR.standard_normalize)
+                  preprocessing=KaggleDR.standard_normalize,
+                  require_both_eyes_same_label=True)
     ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_BG_' + str(size),
                        filename_targets='data/kaggle_dr/'
                                         'retinopathy_solution_01vs234.csv',
-                       preprocessing=KaggleDR.standard_normalize)
+                       preprocessing=KaggleDR.standard_normalize,
+                       require_both_eyes_same_label=True)
 
 if dataset == 'optretina':
     ds = OptRetina(path_data='data/optretina/data_JF_' + str(size),
@@ -94,8 +96,9 @@ if dataset == 'optretina':
 
 untie_biases = defaultdict(lambda: False, {512: True})
 
-network = models.vgg19(input_var=X, height=size, width=size)
-models.load_weights(network['pool5'], weights_init)
+network = models.jeffrey_df(input_var=X, width=512, height=512,
+                            filename=weights_init, n_classes=5,
+                            untie_biases=untie_biases)
 
 n_classes = len(np.unique(ds.y))
 
@@ -105,11 +108,11 @@ n_classes = len(np.unique(ds.y))
 # TODO: write an expression layer that computes the
 #       correlation between feature maps
 
-selection = ['pool1', 'pool2', 'pool3', 'pool4', 'pool5']
+selection = ['2', '5', '8', '13', '18']
 
-mean_pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
-                                                       pool_function=T.mean)
-                        for k in selection]
+pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
+                                                  pool_function=T.mean)
+                   for k in selection]
 
 network['conv_combined'] = lasagne.layers.ConcatLayer(pooled_features, axis=1)
 
