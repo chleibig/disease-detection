@@ -20,7 +20,7 @@ from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
 from util import Progplot
 
-batch_size = 10
+batch_size = 32
 n_epoch = 30
 lr_logreg = 0.005
 lr_conv = 0.005

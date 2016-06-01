@@ -206,7 +206,7 @@ class KaggleDR(Dataset):
         labels = pd.read_csv(filename_targets, dtype={'level': np.int32})
         if require_both_eyes_same_label:
             labels = KaggleDR.contralateral_agreement(labels)
-        self.image_filenames = labels['image']
+        self.image_filenames = labels['image'].values
         # we store all labels
         self._y = np.array(labels['level'])
         self._n_samples = len(self.y)
