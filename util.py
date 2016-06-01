@@ -1,11 +1,24 @@
 from __future__ import division
+import matplotlib as mpl
+mpl.use('TkAgg')
+
+from matplotlib import pyplot as plt
 import numpy as np
+
 import bokeh.plotting as bp
 import bokeh.client as bc
-import plotting
+
 import seaborn as sns
+from sklearn.metrics import roc_curve, auc
 import keras.callbacks
 from keras import backend as K
+
+FIGURE_TITLE_FONT_SIZE = 16
+
+def allow_plot():
+    plt.ion()
+def close_all():
+    plt.close('all')
 
 
 def quadratic_weighted_kappa(labels_rater_1, labels_rater_2, num_classes):
@@ -156,10 +169,10 @@ class TrainingMonitor(keras.callbacks.Callback):
     """
     def __init__(self, history, show_accuracy=False):
         super(TrainingMonitor, self).__init__()
-        self.loss_plot = plotting.LossPlot(1)
+        self.loss_plot = LossPlot(1)
         self.history = history
         if show_accuracy:
-            self.acc_plot = plotting.AccuracyPlot(2)
+            self.acc_plot = AccuracyPlot(2)
 
     def on_epoch_end(self, epoch, logs={}):
         train_loss = self.history.history['loss'][-1]
@@ -304,6 +317,64 @@ class SelectiveSampler(object):
         return self.Xneg[selection]
 
 
+def roc_curve_plot(labels, predictions, pos_label=1):
+    f_diseased_r, t_diseased_r, thresholds = roc_curve(labels,
+                                                       predictions[:,
+                                                                   pos_label],
+                                                       pos_label=pos_label)
+    roc_auc = auc(f_diseased_r, t_diseased_r, reorder=True)
+
+    plt.plot(f_diseased_r, t_diseased_r,
+             label='ROC curve (auc = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], 'k--')
+    plt.scatter([0.05], [0.8], color='g', s=50,
+                label='recommendation British Diabetic Association')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('false diseased rate (1 - specificity)')
+    plt.ylabel('true diseased rate (sensitivity)')
+    plt.legend(loc="lower right")
 
 
+class LossPlot(object):
 
+    def __init__(self, fignum):
+        self._fig = plt.figure(fignum)
+        self._fig.suptitle('Loss', fontsize=FIGURE_TITLE_FONT_SIZE)
+        plt.grid()
+        self._train_loss_plot, = plt.plot([], [], label='Training Loss')
+        self._valid_loss_plot, = plt.plot([], [], label='Validation Loss')
+        plt.legend()
+        self._ax = plt.gca()
+
+    def plot(self, train_loss, valid_loss, i_epoch):
+        self._train_loss_plot.set_xdata(np.append(self._train_loss_plot.get_xdata(), i_epoch))
+        self._train_loss_plot.set_ydata(np.append(self._train_loss_plot.get_ydata(), train_loss))
+
+        self._valid_loss_plot.set_xdata(np.append(self._valid_loss_plot.get_xdata(), i_epoch))
+        self._valid_loss_plot.set_ydata(np.append(self._valid_loss_plot.get_ydata(), valid_loss))
+        self._ax.relim()
+        self._ax.autoscale_view()
+        self._fig.canvas.draw()
+
+
+class AccuracyPlot(object):
+
+    def __init__(self, fignum):
+        self._fig = plt.figure(fignum)
+        self._fig.suptitle('Accuracy', fontsize=FIGURE_TITLE_FONT_SIZE)
+        plt.grid()
+        self._train_acc_plot, = plt.plot([], [], label='Training Accuracy')
+        self._valid_acc_plot, = plt.plot([], [], label='Validation Accuracy')
+        plt.legend()
+        self._ax = plt.gca()
+
+    def plot(self, train_acc, valid_acc, i_epoch):
+        self._train_acc_plot.set_xdata(np.append(self._train_acc_plot.get_xdata(), i_epoch))
+        self._train_acc_plot.set_ydata(np.append(self._train_acc_plot.get_ydata(), train_acc))
+
+        self._valid_acc_plot.set_xdata(np.append(self._valid_acc_plot.get_xdata(), i_epoch))
+        self._valid_acc_plot.set_ydata(np.append(self._valid_acc_plot.get_ydata(), valid_acc))
+        self._ax.relim()
+        self._ax.autoscale_view()
+        self._fig.canvas.draw()
