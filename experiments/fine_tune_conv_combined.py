@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 
 from collections import defaultdict
+import pickle
 import time
 import numpy as np
 import theano
@@ -22,10 +23,7 @@ from util import Progplot
 
 batch_size = 32
 n_epoch = 30
-lr_logreg = 0.005
-lr_conv = 0.005
-lr_schedule = {0: 0.005, 1: 0.001, 2: 0.0005, 3: 0.0001, 4: 0.00005,
-               5: 0.000001}
+lr_schedule = {0: 0.005, 1: 0.005, 2: 0.001, 3: 0.0005, 4: 0.0001, 5: 0.00001}
 change_every = 5
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
@@ -78,12 +76,12 @@ y = T.ivector('y')
 
 if dataset == 'KaggleDR':
     ds = KaggleDR(path_data='data/kaggle_dr/train_JF_BG_' + str(size),
-                  filename_targets='data/kaggle_dr/trainLabels_01vs234.csv',
+                  filename_targets='data/kaggle_dr/trainLabels_bin.csv',
                   preprocessing=KaggleDR.standard_normalize,
                   require_both_eyes_same_label=True)
     ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_BG_' + str(size),
                        filename_targets='data/kaggle_dr/'
-                                        'retinopathy_solution_01vs234.csv',
+                                        'retinopathy_solution_bin.csv',
                        preprocessing=KaggleDR.standard_normalize,
                        require_both_eyes_same_label=True)
 
@@ -348,3 +346,9 @@ for Xb, yb in ds.iterate_minibatches(idx_test,
 
 print('Test loss: ', loss_test.mean())
 print('Test AUC: ', roc_auc_score(ds.y[idx_test], predictions_test[:, 1]))
+
+res = {'history': progplot.y,
+       'y_test': ds.y[idx_test],
+       'pred_test': predictions_test,
+       'param values': lasagne.layers.get_all_param_values(l_out)}
+pickle.dump(res, open('results.pkl', 'wb'))
