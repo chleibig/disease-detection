@@ -100,9 +100,10 @@ network = models.jeffrey_df(input_var=X, width=512, height=512,
 
 n_classes = len(np.unique(ds.y))
 
-######################################################
-# Construct view on network
-######################################################
+###############################################################################
+###############################################################################
+# Construct conv. combined view on network
+###############################################################################
 # TODO: write an expression layer that computes the
 #       correlation between feature maps
 
@@ -112,8 +113,26 @@ pooled_features = [lasagne.layers.GlobalPoolLayer(network[k],
                                                   pool_function=T.mean)
                    for k in selection]
 
-network['conv_combined'] = lasagne.layers.ConcatLayer(pooled_features, axis=1)
+###############################################################################
+# Normalization according to Zheng et al. (2016) (originally rootSIFT)
 
+# rectify because negative values cannot be square rooted (this is not in the
+# paper)
+feat_rectified = [lasagne.layers.NonlinearityLayer(l,
+                  nonlinearity=lasagne.nonlinearities.rectify)
+                  for l in pooled_features]
+# Normalization within each layer
+feat_norm = [lasagne.layers.ExpressionLayer(l,
+             lambda X: (X / X.sum(axis=1, keepdims=True))**0.5)
+             for l in feat_rectified]
+feat_concat = lasagne.layers.ConcatLayer(feat_norm, axis=1)
+# Normalization across layers
+feat_concat_norm = lasagne.layers.ExpressionLayer(feat_concat,
+                             lambda X: (X / X.sum(axis=1, keepdims=True))**0.5)
+###############################################################################
+network['conv_combined'] = feat_concat_norm
+###############################################################################
+###############################################################################
 
 network['logreg'] = DenseLayer(network['conv_combined'],
                                num_units=n_classes,
