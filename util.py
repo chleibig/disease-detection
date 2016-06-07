@@ -84,7 +84,7 @@ class Progplot(object):
     """
 
     def __init__(self, n_x, x_axis_label, names, show=True,
-                 session_id='progplot'):
+                 title='Monitor neural network training'):
         """
         Parameters
         ----------
@@ -96,15 +96,19 @@ class Progplot(object):
         show : bool (True by default)
             if True, browser window is automatically opened and dynamically
             updated
-        session_id : str (default: 'progplot')
-            The plot is served under:
-            http://localhost:port/?bokeh-session-id=session_id
+        title : str (default: 'Monitor neural network training')
+
+        Notes
+        -----
+
+        The plot is served under:
+            http://localhost:port/?bokeh-session-id=progplot
 
         """
 
         self.n_x = n_x
         self.seen_so_far = 0
-        self.p = bp.figure(title="Monitor neural network training",
+        self.p = bp.figure(title=title,
                            x_axis_label=x_axis_label,
                            x_range=[0, n_x])
         self.y = {k: np.zeros(n_x) for k in names}
@@ -119,7 +123,7 @@ class Progplot(object):
         self.curdoc = bp.curdoc()
         # This line is crucial as it adds the necessary on change callbacks:
         self.curdoc.add_root(self.p)
-        self.session = bc.push_session(self.curdoc, session_id=session_id)
+        self.session = bc.push_session(self.curdoc, session_id='progplot')
         if show:
             self.session.show()
         self.show = show
