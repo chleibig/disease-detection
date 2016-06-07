@@ -106,8 +106,7 @@ if dataset == 'optretina':
 
 n_classes = len(np.unique(ds.y))
 
-
-for last_layer in ['18', '13', '8', '5', '17', '16', '15', '14']:
+for last_layer in ['12', '11', '10', '9', '7', '6', '4', '3', '2', '1']:
     print('-' * 40)
     print('Last JF layer: ', last_layer)
     print('-' * 40)
@@ -172,7 +171,7 @@ for last_layer in ['18', '13', '8', '5', '17', '16', '15', '14']:
     progplot = Progplot(n_epoch, "epochs (batch_size " + str(batch_size) + ")",
                         names=['loss (train)', 'loss (val.)',
                                'AUC (train)', 'AUC (val.)'],
-                        session_id='ablation_layer_' + last_layer)
+                        title='ablation_layer_' + last_layer)
 
     y_train = ds.y[idx_train]
     N_DISEASED = np.sum(y_train == 1)
