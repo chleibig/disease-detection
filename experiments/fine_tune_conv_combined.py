@@ -23,7 +23,7 @@ from util import Progplot
 
 batch_size = 32
 n_epoch = 30
-lr_schedule = {0: 0.005, 1: 0.005, 2: 0.001, 3: 0.0005, 4: 0.0001, 5: 0.00001}
+lr_schedule = {0: 0.001, 1: 0.001, 2: 0.001, 3: 0.0005, 4: 0.0001, 5: 0.00001}
 change_every = 5
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
