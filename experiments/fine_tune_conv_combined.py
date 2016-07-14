@@ -21,7 +21,7 @@ from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
 from util import Progplot
 
-batch_size = 32
+batch_size = 128
 n_epoch = 30
 lr_schedule = {0: 0.001, 1: 0.001, 2: 0.001, 3: 0.0005, 4: 0.0001, 5: 0.00001}
 change_every = 5
@@ -30,8 +30,9 @@ l1_lambda = 0.001  # only last layer
 size = 512
 dataset = 'KaggleDR'
 
-weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
-load_previous_weights = False
+#weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
+weights_init = None
+load_previous_weights = True
 best_auc = 0.0
 
 AUGMENTATION_PARAMS = {'featurewise_center': False,
@@ -106,7 +107,7 @@ if dataset == 'optretina':
 
 n_classes = len(np.unique(ds.y))
 
-for last_layer in ['12', '11', '10', '9', '7', '6', '4', '3', '2', '1']:
+for last_layer in ['9']:
     print('-' * 40)
     print('Last JF layer: ', last_layer)
     print('-' * 40)
@@ -209,7 +210,7 @@ for last_layer in ['12', '11', '10', '9', '7', '6', '4', '3', '2', '1']:
         predictions_train = np.zeros((len(selection), 2))
         y_train_sel = ds.y[idx_train[selection]]
         pos = 0
-        bs_outer = batch_size * 10
+        bs_outer = batch_size * 5
         for Xb_outer, yb_outer in ds.iterate_minibatches(idx_train[selection],
                                                          batch_size=bs_outer,
                                                          shuffle=False):
