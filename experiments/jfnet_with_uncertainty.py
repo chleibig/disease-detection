@@ -28,9 +28,9 @@ network['0'].input_var = X
 network['22'].input_var = img_dim
 l_out = network['31']
 
-fname_labels = 'data/kaggle_dr/retinopathy_solution_wh.csv'
+fname_labels = 'data/kaggle_dr/trainLabels_wh.csv'
 
-kdr = KaggleDR(path_data='data/kaggle_dr/test_JF_512',
+kdr = KaggleDR(path_data='data/kaggle_dr/train_JF_512',
                filename_targets=fname_labels,
                preprocessing=KaggleDR.jf_trafo)
 
@@ -84,5 +84,5 @@ results = {'det_out': det_out,
            'det_kappa': det_kappa,
            'det_acc': det_acc}
 
-with open('jfnet_with_uncertainty_results.pkl', 'wb') as h:
+with open('jfnet_with_uncertainty_results_KaggleDR_train.pkl', 'wb') as h:
     pickle.dump(results, h)
