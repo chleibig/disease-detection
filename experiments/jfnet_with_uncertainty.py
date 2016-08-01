@@ -62,11 +62,8 @@ def get_img_dim(width, height, idx, n_samples):
 
 idx = 0
 progbar = Progbar(kdr.n_samples)
-# Note that the batch_size is set to one in order to ensure that MC dropout
-# are not correlated across different images. Is this really necessary or over-
-# cautious?
 for batch in kdr.iterate_minibatches(np.arange(kdr.n_samples),
-                                     batch_size=4, shuffle=False):
+                                     batch_size=512, shuffle=False):
     inputs, targets = batch
     n_s = len(targets)
 
