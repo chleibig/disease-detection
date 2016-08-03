@@ -190,7 +190,7 @@ class KaggleDR(Dataset):
     def jf_trafo(image):
         """Apply Jeffrey de Fauw's transformation"""
 
-        #Recovered from model_dump['data_loader_params'].zmuv_mean
+        # Recovered from model_dump['data_loader_params'].zmuv_mean
         # and *.zmuv_std of 2015_07_17_123003.pkl in Jeffrey's repo:
         ZMUV_MEAN = 0.04166667
         ZMUV_STD = 0.20412415
@@ -199,11 +199,14 @@ class KaggleDR(Dataset):
         return (image - ZMUV_MEAN) / (0.05 + ZMUV_STD)
 
     def __init__(self, path_data=None, filename_targets=None,
-                 preprocessing=standard_normalize):
+                 preprocessing=standard_normalize,
+                 require_both_eyes_same_label=False):
         self.path_data = path_data
         self.filename_targets = filename_targets
-        labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
-        self.image_filenames = labels['image']
+        labels = pd.read_csv(filename_targets, dtype={'level': np.int32})
+        if require_both_eyes_same_label:
+            labels = KaggleDR.contralateral_agreement(labels)
+        self.image_filenames = labels['image'].values
         # we store all labels
         self._y = np.array(labels['level'])
         self._n_samples = len(self.y)
@@ -213,6 +216,34 @@ class KaggleDR(Dataset):
         # wich samples we have cached
         self.indices_in_X = None
         self.preprocessing = preprocessing
+
+    @staticmethod
+    def contralateral_agreement(df):
+        """Get only the samples for which the contralateral image had been
+           assigned the same label
+
+        Parameters
+        ==========
+        df: pandas data frame
+            all samples
+
+        Returns
+        =======
+
+        df: pandas data frame
+            just the samples with contralateral label agreement
+
+        """
+
+        left = df.image.str.contains(r'\d+_left')
+        right = df.image.str.contains(r'\d+_right')
+        df[left].level == df[right].level
+        accepted_patients = (df[left].level == df[right].level).values
+        accepted_images_left = df[left].image[accepted_patients]
+        accepted_images_right = df[right].image[accepted_patients]
+        accepted_images = pd.concat((accepted_images_left,
+                                     accepted_images_right))
+        return df[df.image.isin(accepted_images)]
 
     def load_image(self, filename):
         """
@@ -302,10 +333,16 @@ class OptRetina(Dataset):
     """
 
     def __init__(self, path_data=None, filename_targets=None,
-                 preprocessing=KaggleDR.jf_trafo):
+                 preprocessing=KaggleDR.jf_trafo, exclude_path=None):
         self.path_data = path_data
         self.filename_targets = filename_targets
-        labels = pd.read_csv(self.filename_targets, dtype={'level': np.int32})
+        labels = pd.read_csv(self.filename_targets,
+                             dtype={'diseased': np.int32})
+
+        if exclude_path is not None:
+            labels = OptRetina.exclude_samples(exclude_path,
+                                               labels)
+
         self.image_filenames = OptRetina.build_unique_filenames(labels)
         self.extension = '.jpeg'
         # we store all labels
@@ -317,6 +354,19 @@ class OptRetina(Dataset):
         # wich samples we have cached
         self.indices_in_X = None
         self.preprocessing = preprocessing
+
+    @staticmethod
+    def exclude_samples(exclude_path, labels):
+        exclude_filenames = [fn.split('.')[0] for fn in
+                             os.listdir(exclude_path)]
+
+        images = labels.filename.apply(lambda fn: fn.split('.')[0]).values
+        centre_ids = labels.centre_id.values.astype(str)
+        filenames = pd.Series(['_'.join(centre_id_and_image) for
+                               centre_id_and_image in
+                               zip(centre_ids, images)])
+
+        return labels[~filenames.isin(exclude_filenames)]
 
     @staticmethod
     def build_unique_filenames(data_frame):
