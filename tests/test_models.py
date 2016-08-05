@@ -1,7 +1,7 @@
 import numpy.testing as nt
 
 
-def test_jeffrey_df():
+def test_jeffrey_df_ref():
     """Verify correct reimplementation of Jeffrey de Fauw's net"""
     import cPickle as pickle
     import sys
@@ -20,7 +20,7 @@ def test_jeffrey_df():
     model_ref = pickle.load(open(filename_ref, 'r'))
     l_out_ref = model_ref['l_out']
 
-    network = models.jeffrey_df(filename=filename, batch_size=64)
+    network = models.jeffrey_df_ref(filename=filename, batch_size=64)
     l_out = network['31']
 
     # check weights and biases for equality
