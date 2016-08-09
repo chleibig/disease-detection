@@ -326,18 +326,45 @@ class SelectiveSampler(object):
         return self.Xneg[selection]
 
 
-def roc_curve_plot(labels, predictions, pos_label=1):
-    f_diseased_r, t_diseased_r, thresholds = roc_curve(labels,
-                                                       predictions[:,
-                                                                   pos_label],
+def roc_curve_plot(y_true, y_score, pos_label=1,
+                   legend_prefix='', plot_BDA=False):
+    """Compute and plot receiver operating characteristic (ROC)
+
+    Parameters
+    ==========
+
+    y_true : array, shape = [n_samples]
+        True binary labels in range {0, 1} or {-1, 1}.  If labels are not
+        binary, pos_label should be explicitly given.
+
+    y_score : array, shape = [n_samples]
+        Target scores, can either be probability estimates of the positive
+        class or confidence values.
+
+    pos_label : int
+        Label considered as positive and others are considered negative.
+
+    legend_prefix : string, by default empty
+        plot legend: 'legend_prefix (auc=XX)''
+
+    plot_BDA : boolean, False by default
+        recommendation of British Diabetic Association
+
+    """
+    assert y_score.ndim == 1, 'y_score should be of shape (n_samples,)'
+    assert len(y_true) == len(y_score), \
+        'y_true and y_score must both be n_samples long'
+
+    f_diseased_r, t_diseased_r, thresholds = roc_curve(y_true, y_score,
                                                        pos_label=pos_label)
     roc_auc = auc(f_diseased_r, t_diseased_r, reorder=True)
 
     plt.plot(f_diseased_r, t_diseased_r,
-             label='ROC curve (auc = %0.2f)' % roc_auc)
+             label=legend_prefix + ' (auc=%0.2f)' % roc_auc)
     plt.plot([0, 1], [0, 1], 'k--')
-    plt.scatter([0.05], [0.8], color='g', s=50,
-                label='recommendation British Diabetic Association')
+    if plot_BDA:
+        plt.scatter([0.05], [0.8], color='g', s=50,
+                    label='recommendation British Diabetic Association')
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
     plt.xlabel('false diseased rate (1 - specificity)')
