@@ -1,3 +1,4 @@
+"""Performance of original JFnet on Kaggle's level prediction task"""
 from __future__ import print_function
 import cPickle as pickle
 import pandas as pd
@@ -17,13 +18,13 @@ def load_labels():
 
 def load_softmax_outputs():
     # train predictions obtained with e.g.
-    # experiments/jfnet_with_uncertainty.py, commit 1234ce0
+    # scripts/predict.py, commit 1234ce0
     with open('data/processed/1234ce0_jfnet_100MCdropout_KaggleDR_train.pkl',
               'rb') as h:
         pred_train = pickle.load(h)
     softmax_train = pred_train['det_out']
     # test predictions obtained with e.g.
-    # experiments/jfnet_with_uncertainty.py, commit 40d8265
+    # scripts/predict.py, commit 40d8265
     with open('data/processed/40d8265_jfnet_100MCdropout_KaggleDR_test.pkl',
               'rb') as h:
         pred_test = pickle.load(h)
