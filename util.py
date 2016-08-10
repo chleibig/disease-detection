@@ -1,24 +1,13 @@
 from __future__ import division
-import matplotlib as mpl
-mpl.use('TkAgg')
 
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 import numpy as np
-
 import bokeh.plotting as bp
 import bokeh.client as bc
-
 import seaborn as sns
 from sklearn.metrics import roc_curve, auc
 import keras.callbacks
 from keras import backend as K
-
-FIGURE_TITLE_FONT_SIZE = 16
-
-def allow_plot():
-    plt.ion()
-def close_all():
-    plt.close('all')
 
 
 def quadratic_weighted_kappa(labels_rater_1, labels_rater_2, num_classes):
@@ -55,14 +44,14 @@ def quadratic_weighted_kappa(labels_rater_1, labels_rater_2, num_classes):
 
     for i in np.arange(num_classes):
         for j in np.arange(num_classes):
-            w[i][j] = ((i-j)/(num_classes - 1))**2
+            w[i][j] = ((i - j) / (num_classes - 1))**2
             e[i][j] = list(labels_rater_1).count(i) * \
-                      list(labels_rater_2).count(j)/len(list(labels_rater_2))
+                      list(labels_rater_2).count(j) / len(list(labels_rater_2))
             for ii, jj in zip(labels_rater_1, labels_rater_2):
                 if ii == i and jj == j:
                     ob[i][j] += 1
 
-    return 1 - sum(sum(np.multiply(w, ob)))/sum(sum(np.multiply(w, e)))
+    return 1 - sum(sum(np.multiply(w, ob))) / sum(sum(np.multiply(w, e)))
 
 
 class Progplot(object):
@@ -169,29 +158,28 @@ class Progplot(object):
 
 
 class TrainingMonitor(keras.callbacks.Callback):
-    """Monitor loss and accuracy dynamically for training and validation
-    data
+    """Monitor training and validation quantities
+
+    By default, loss and val_loss are monitored, further quantities
+    can be provided to the constructor
 
     To be used together with keras as documented under
        http://keras.io/callbacks/
 
+    For further usage instructions see the documentation of the Progplot class
+
     """
-    def __init__(self, history, show_accuracy=False):
+    def __init__(self, n_epochs, batch_size, title='Disease detection monitor',
+                 quantities=['loss', 'val_loss']):
         super(TrainingMonitor, self).__init__()
-        self.loss_plot = LossPlot(1)
-        self.history = history
-        if show_accuracy:
-            self.acc_plot = AccuracyPlot(2)
+        self.progplot = Progplot(n_epochs,
+                                 "epochs (batch_size " + str(batch_size) + ")",
+                                 names=quantities,
+                                 title=title)
+        self.quantities = quantities
 
     def on_epoch_end(self, epoch, logs={}):
-        train_loss = self.history.history['loss'][-1]
-        val_loss = self.history.history['val_loss'][-1]
-        self.loss_plot.plot(train_loss, val_loss, epoch)
-
-        if hasattr(self, 'acc_plot'):
-            train_acc = self.history.history['acc'][-1]
-            val_acc = self.history.history['val_acc'][-1]
-            self.acc_plot.plot(train_acc, val_acc, epoch)
+        self.progplot.add(values=[(q, logs.get(q)) for q in self.quantities])
 
 
 class AdaptiveLearningRateScheduler(keras.callbacks.Callback):
@@ -204,8 +192,7 @@ class AdaptiveLearningRateScheduler(keras.callbacks.Callback):
 
     def __init__(self, initial_lr=0.1, decay=0.1, patience=20, verbose=0):
         super(AdaptiveLearningRateScheduler, self).__init__()
-        assert type(initial_lr) == float, \
-                    'The learning rate should be float.'
+        assert type(initial_lr) == float, 'The learning rate should be float.'
         self.lr = initial_lr
         self.decay = decay
         self.patience = patience
@@ -370,47 +357,3 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
     plt.xlabel('false diseased rate (1 - specificity)')
     plt.ylabel('true diseased rate (sensitivity)')
     plt.legend(loc="lower right")
-
-
-class LossPlot(object):
-
-    def __init__(self, fignum):
-        self._fig = plt.figure(fignum)
-        self._fig.suptitle('Loss', fontsize=FIGURE_TITLE_FONT_SIZE)
-        plt.grid()
-        self._train_loss_plot, = plt.plot([], [], label='Training Loss')
-        self._valid_loss_plot, = plt.plot([], [], label='Validation Loss')
-        plt.legend()
-        self._ax = plt.gca()
-
-    def plot(self, train_loss, valid_loss, i_epoch):
-        self._train_loss_plot.set_xdata(np.append(self._train_loss_plot.get_xdata(), i_epoch))
-        self._train_loss_plot.set_ydata(np.append(self._train_loss_plot.get_ydata(), train_loss))
-
-        self._valid_loss_plot.set_xdata(np.append(self._valid_loss_plot.get_xdata(), i_epoch))
-        self._valid_loss_plot.set_ydata(np.append(self._valid_loss_plot.get_ydata(), valid_loss))
-        self._ax.relim()
-        self._ax.autoscale_view()
-        self._fig.canvas.draw()
-
-
-class AccuracyPlot(object):
-
-    def __init__(self, fignum):
-        self._fig = plt.figure(fignum)
-        self._fig.suptitle('Accuracy', fontsize=FIGURE_TITLE_FONT_SIZE)
-        plt.grid()
-        self._train_acc_plot, = plt.plot([], [], label='Training Accuracy')
-        self._valid_acc_plot, = plt.plot([], [], label='Validation Accuracy')
-        plt.legend()
-        self._ax = plt.gca()
-
-    def plot(self, train_acc, valid_acc, i_epoch):
-        self._train_acc_plot.set_xdata(np.append(self._train_acc_plot.get_xdata(), i_epoch))
-        self._train_acc_plot.set_ydata(np.append(self._train_acc_plot.get_ydata(), train_acc))
-
-        self._valid_acc_plot.set_xdata(np.append(self._valid_acc_plot.get_xdata(), i_epoch))
-        self._valid_acc_plot.set_ydata(np.append(self._valid_acc_plot.get_ydata(), valid_acc))
-        self._ax.relim()
-        self._ax.autoscale_view()
-        self._fig.canvas.draw()
