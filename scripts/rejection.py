@@ -89,7 +89,7 @@ def performance_over_uncertainty_tol(uncertainty, y, probs, measure):
 def acc_rejection_figure(y, y_score, uncertainty, disease_onset,
                          save=False, format='.svg'):
     plt.figure(figsize=A4_WIDTH_SQUARE)
-    plt.suptitle('Accuracy under rejection (Disease onset: {})'.format(
+    plt.suptitle('Accuracy under rejection (disease onset: {})'.format(
                  disease_onset))
     y_pred = argmax_labels(y_score)
     corr = (y_pred == y)
@@ -138,7 +138,7 @@ def acc_rejection_figure(y, y_score, uncertainty, disease_onset,
 def roc_auc_rejection_figure(y, y_score, uncertainty, disease_onset,
                              save=False, format='.svg'):
     plt.figure(figsize=A4_WIDTH_SQUARE)
-    plt.suptitle('ROC under rejection (Disease onset: {})'.format(
+    plt.suptitle('ROC under rejection (disease onset: {})'.format(
                  disease_onset))
 
     uncertainty_tol, frac_retain, roc_auc, roc_auc_ctrl = \
@@ -174,6 +174,24 @@ def roc_auc_rejection_figure(y, y_score, uncertainty, disease_onset,
         plt.savefig('roc_' + str(disease_onset) + format)
 
 
+def class_conditional_uncertainty(y, uncertainty, disease_onset,
+                                  save=False, format='.svg'):
+    plt.figure(figsize=A4_WIDTH_SQUARE)
+    plt.suptitle('Class conditional distribution of uncertainty'
+                 ' (disease onset: {})'.format(disease_onset))
+    HEALTHY, DISEASED = 0, 1
+
+    sns.distplot(uncertainty[y == HEALTHY], label='healthy')
+    sns.distplot(uncertainty[y == DISEASED], label='diseased')
+    plt.xlabel('model uncertainty')
+    plt.ylabel('density')
+    plt.legend(loc='best')
+    plt.ylim(0, 80)
+
+    if save:
+        plt.savefig('class_cond_uncertainty_' + str(disease_onset) + format)
+
+
 def main():
     y = load_labels()
     probs, probs_mc = load_predictions()
@@ -187,6 +205,8 @@ def main():
                              save=True, format='.png')
         roc_auc_rejection_figure(y_bin, pred_mean, pred_std, dl,
                                  save=True, format='.png')
+        class_conditional_uncertainty(y_bin, pred_std, dl,
+                                      save=True, format='.png')
 
 
 if __name__ == '__main__':
