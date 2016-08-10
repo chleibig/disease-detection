@@ -347,7 +347,7 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
     roc_auc = auc(f_diseased_r, t_diseased_r, reorder=True)
 
     plt.plot(f_diseased_r, t_diseased_r,
-             label=legend_prefix + ' (auc=%0.2f)' % roc_auc)
+             label=legend_prefix + ' (auc=%0.3f)' % roc_auc)
     plt.plot([0, 1], [0, 1], 'k--')
     if plot_BDA:
         plt.scatter([0.05], [0.8], color='g', s=50,
