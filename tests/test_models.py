@@ -6,7 +6,7 @@ def test_jfnet():
     import cPickle as pickle
     import sys
     import lasagne.layers as ll
-    import models
+    from models import JFnet
 
     # loading the model_ref further down requires access to layers module from
     # jeffrey de fauw's repo
@@ -20,7 +20,7 @@ def test_jfnet():
     model_ref = pickle.load(open(filename_ref, 'r'))
     l_out_ref = model_ref['l_out']
 
-    network = models.jfnet(filename=filename, batch_size=64)
+    network = JFnet.build_model(filename=filename, batch_size=64)
     l_out = network['31']
 
     # check weights and biases for equality
@@ -41,11 +41,10 @@ def test_output_jfnet():
     import lasagne
 
     from datasets import KaggleDR
-    import models
+    from models import JFnet
 
     weights = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
-    network = models.jfnet(width=512, height=512, filename=weights,
-                           untie_biases=True)
+    network = JFnet.build_model(width=512, height=512, filename=weights)
 
     expected = np.array([[9.38881755e-01, 5.23291342e-02, 8.59508850e-03,
                           1.34651185e-04, 5.94010562e-05],
@@ -54,7 +53,7 @@ def test_output_jfnet():
 
     X = T.tensor4('inputs')
     network['0'].input_var = X
-    img_dim = T.tensor4('img_dim')
+    img_dim = T.matrix('img_dim')
     network['22'].input_var = img_dim
     prob = lasagne.layers.get_output(network['31'], deterministic=True)
 
@@ -65,13 +64,11 @@ def test_output_jfnet():
                    preprocessing=KaggleDR.jf_trafo)
 
     inputs, targets = next(kdr.iterate_minibatches(np.arange(kdr.n_samples),
-                                                   batch_size=2, shuffle=False))
+                                                   batch_size=2,
+                                                   shuffle=False))
     n_s = len(targets)
-    _img_dim = np.concatenate(
-        (np.full((n_s, 1, 1, 1), inputs.shape[2], dtype=np.float32),
-         np.full((n_s, 1, 1, 1), inputs.shape[3], dtype=np.float32)),
-        axis=1)/700.  # jeffrey does that under load_image_and_process?!
-    output =  forward_pass(inputs, _img_dim)
+    width = height = np.array(n_s * [512], dtype=np.float32)
+    output = forward_pass(inputs, JFnet.get_img_dim(width, height, 0, n_s))
     output = np.reshape(output, (2, 5))
 
     nt.assert_array_almost_equal(expected, output)

@@ -11,7 +11,7 @@ from datasets import KaggleDR
 from util import quadratic_weighted_kappa
 
 import cPickle as pickle
-import models
+from models import JFnet
 
 
 X = T.tensor4('X')
@@ -22,7 +22,7 @@ T = 100  # Number of MC dropout samples
 
 weights = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 
-network = models.jfnet(width=512, height=512, filename=weights)
+network = JFnet.build_model(width=512, height=512, filename=weights)
 
 network['0'].input_var = X
 network['22'].input_var = img_dim
@@ -48,18 +48,6 @@ stoch_fn = theano.function([X, img_dim],
 det_out = np.zeros((kdr.n_samples, 5), dtype=np.float32)
 stoch_out = np.zeros((kdr.n_samples, 5, T), dtype=np.float32)
 
-
-def get_img_dim(width, height, idx, n_samples):
-    """Second input to JFnet consumes image dimensions
-
-    division by 700 according to https://github.com/JeffreyDF/
-    kaggle_diabetic_retinopathy/blob/43e7f51d5f3b2e240516678894409332bb3767a8
-    /generators.py::lines 41-42
-    """
-    img_dim = np.vstack((width[idx:idx + n_samples],
-                         height[idx:idx + n_samples])).T / 700.
-    return img_dim
-
 idx = 0
 progbar = Progbar(kdr.n_samples)
 for batch in kdr.iterate_minibatches(np.arange(kdr.n_samples),
@@ -67,7 +55,7 @@ for batch in kdr.iterate_minibatches(np.arange(kdr.n_samples),
     inputs, targets = batch
     n_s = len(targets)
 
-    _img_dim = get_img_dim(width, height, idx, n_s)
+    _img_dim = JFnet.get_img_dim(width, height, idx, n_s)
 
     det_out[idx:idx + n_s] = det_fn(inputs, _img_dim)
     for t in range(T):

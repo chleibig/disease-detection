@@ -17,6 +17,7 @@ from keras.utils.generic_utils import Progbar
 from keras.preprocessing.image import ImageDataGenerator
 
 import models
+from models import JFnet
 from datasets import KaggleDR, OptRetina
 from util import SelectiveSampler
 from util import Progplot
@@ -119,9 +120,9 @@ for last_layer in ['9']:
 
     untie_biases = defaultdict(lambda: False, {512: True})
 
-    network = models.jfnet(input_var=X, width=512, height=512,
-                           filename=weights_init, n_classes=5,
-                           untie_biases=untie_biases)
+    network = JFnet.build_model(input_var=X, width=512, height=512,
+                                filename=weights_init, n_classes=5,
+                                untie_biases=untie_biases)
 
     mean_pooled = lasagne.layers.GlobalPoolLayer(network[last_layer],
                                                  pool_function=T.mean)
