@@ -68,22 +68,53 @@ def accuracy(y_true, probs):
     return (y_true == y_pred).sum() / float(len(y_true))
 
 
+def stratified_mask(y, y_prior, shuffle=False):
+    """Get mask such that y[mask] has the same size and class freq. as y_prior
+
+    Parameters
+    ==========
+    y : array with labels
+    y_prior: subset of y, defining the relative class frequencies
+    shuffle: bool, False by default
+        random selection from the pool of each class
+
+    Returns
+    =======
+    select: bool. array of the same size as y with len(y_prior) True entries
+
+
+    """
+    classes = np.unique(y_prior)
+    k_n = {k: (y_prior == k).sum() for k in classes}
+    mask = np.array(len(y) * [False])
+    for k, n in k_n.iteritems():
+        idx_k = np.where(y == k)[0]
+        if shuffle:
+            np.random.shuffle(idx_k)
+        select_n_from_k = idx_k[:n]
+        mask[select_n_from_k] = True
+    return mask
+
+
 def performance_over_uncertainty_tol(uncertainty, y, probs, measure):
     uncertainty_tol = np.linspace(np.percentile(uncertainty, 10),
                                   uncertainty.max(),
                                   100)
-    performance = np.zeros_like(uncertainty_tol)
-    performance_ctrl = np.zeros_like(uncertainty_tol)
+    p = np.zeros_like(uncertainty_tol)
+    p_rand = np.zeros_like(uncertainty_tol)
+    p_strat = np.zeros_like(uncertainty_tol)
     frac_retain = np.zeros_like(uncertainty_tol)
     n_samples = len(uncertainty)
     for i, ut in enumerate(uncertainty_tol):
         accept = (uncertainty <= ut)
-        frac_retain[i] = accept.sum() / float(n_samples)
-        performance[i] = measure(y[accept], probs[accept])
         rand_sel = np.random.permutation(accept)
-        performance_ctrl[i] = measure(y[rand_sel], probs[rand_sel])
+        strat_sel = stratified_mask(y, y[accept], shuffle=True)
+        p[i] = measure(y[accept], probs[accept])
+        p_rand[i] = measure(y[rand_sel], probs[rand_sel])
+        p_strat[i] = measure(y[strat_sel], probs[strat_sel])
+        frac_retain[i] = accept.sum() / float(n_samples)
 
-    return uncertainty_tol, frac_retain, performance, performance_ctrl
+    return uncertainty_tol, frac_retain, p, p_rand, p_strat
 
 
 def acc_rejection_figure(y, y_score, uncertainty, disease_onset,
@@ -112,21 +143,21 @@ def acc_rejection_figure(y, y_score, uncertainty, disease_onset,
     plt.ylabel('counts')
     plt.legend(loc='best')
 
-    uncertainty_tol, frac_retain, acc, acc_ctrl = \
-        performance_over_uncertainty_tol(uncertainty,
-                                         y, y_score,
-                                         accuracy)
+    uncertainty_tol, frac_retain, acc, acc_rand, acc_strat = \
+        performance_over_uncertainty_tol(uncertainty, y, y_score, accuracy)
 
     plt.subplot(2, 2, 3)
     plt.plot(uncertainty_tol, acc, label='dropout uncertainty')
-    plt.plot(uncertainty_tol, acc_ctrl, label='randomized control')
+    plt.plot(uncertainty_tol, acc_rand, label='randomly rejected')
+    plt.plot(uncertainty_tol, acc_strat, label='prior preserved')
     plt.xlabel('tolerated model uncertainty')
     plt.ylabel('accuracy')
     plt.legend(loc='best')
 
     plt.subplot(2, 2, 4)
     plt.plot(frac_retain, acc, label='dropout uncertainty')
-    plt.plot(frac_retain, acc_ctrl, label='randomized control')
+    plt.plot(frac_retain, acc_rand, label='randomly rejected')
+    plt.plot(frac_retain, acc_strat, label='prior preserved')
     plt.xlabel('fraction of retained data')
     plt.ylabel('accuracy')
     plt.legend(loc='best')
@@ -141,21 +172,22 @@ def roc_auc_rejection_figure(y, y_score, uncertainty, disease_onset,
     plt.suptitle('ROC under rejection (disease onset: {})'.format(
                  disease_onset))
 
-    uncertainty_tol, frac_retain, roc_auc, roc_auc_ctrl = \
-        performance_over_uncertainty_tol(uncertainty,
-                                         y, y_score,
+    uncertainty_tol, frac_retain, auc, auc_rand, auc_strat = \
+        performance_over_uncertainty_tol(uncertainty, y, y_score,
                                          roc_auc_score)
 
     plt.subplot2grid((2, 2), (0, 0))
-    plt.plot(uncertainty_tol, roc_auc, label='dropout uncertainty')
-    plt.plot(uncertainty_tol, roc_auc_ctrl, label='randomized control')
+    plt.plot(uncertainty_tol, auc, label='dropout uncertainty')
+    plt.plot(uncertainty_tol, auc_rand, label='randomly rejected')
+    plt.plot(uncertainty_tol, auc_strat, label='prior preserved')
     plt.xlabel('tolerated model uncertainty')
     plt.ylabel('roc_auc')
     plt.legend(loc='best')
 
     plt.subplot2grid((2, 2), (0, 1))
-    plt.plot(frac_retain, roc_auc, label='dropout uncertainty')
-    plt.plot(frac_retain, roc_auc_ctrl, label='randomized control')
+    plt.plot(frac_retain, auc, label='dropout uncertainty')
+    plt.plot(frac_retain, auc_rand, label='randomly rejected')
+    plt.plot(frac_retain, auc_strat, label='prior preserved')
     plt.xlabel('fraction of retained data')
     plt.ylabel('roc_auc')
     plt.legend(loc='best')
@@ -176,9 +208,8 @@ def roc_auc_rejection_figure(y, y_score, uncertainty, disease_onset,
 
 def class_conditional_uncertainty(y, uncertainty, disease_onset,
                                   save=False, format='.svg'):
-    plt.figure(figsize=A4_WIDTH_SQUARE)
-    plt.suptitle('Class conditional distribution of uncertainty'
-                 ' (disease onset: {})'.format(disease_onset))
+    plt.figure(figsize=map(lambda x: x / 2.0, A4_WIDTH_SQUARE))
+    plt.title('Disease onset: {}'.format(disease_onset))
     HEALTHY, DISEASED = 0, 1
 
     sns.distplot(uncertainty[y == HEALTHY], label='healthy')
