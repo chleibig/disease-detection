@@ -71,9 +71,9 @@ class Dataset(object):
 
         assert train_frac + val_frac + test_frac <= 1.0
 
-        train_size = int(np.ceil(self.n_samples*train_frac))
-        val_size = int(np.ceil(self.n_samples*val_frac))
-        test_size = int(np.ceil(self.n_samples*test_frac))
+        train_size = int(np.ceil(self.n_samples * train_frac))
+        val_size = int(np.ceil(self.n_samples * val_frac))
+        test_size = int(np.ceil(self.n_samples * test_frac))
 
         indices = np.arange(self.n_samples)
         if shuffle:
@@ -177,14 +177,14 @@ class KaggleDR(Dataset):
 
         # channel standard deviations (calculated by team o_O)
         STD = np.array([70.53946096, 51.71475228, 43.03428563],
-                   dtype=theano.config.floatX)
+                       dtype=theano.config.floatX)
         # channel means (calculated by team o_O)
         MEAN = np.array([108.64628601, 75.86886597, 54.34005737],
-                    dtype=theano.config.floatX)
+                        dtype=theano.config.floatX)
 
         return np.divide(np.subtract(image,
                                      MEAN[:, np.newaxis, np.newaxis]),
-                                     STD[:, np.newaxis, np.newaxis])
+                         STD[:, np.newaxis, np.newaxis])
 
     @staticmethod
     def jf_trafo(image):
@@ -297,8 +297,7 @@ class KaggleDR(Dataset):
             # map indices [0, n_all_samples] to [0, n_stored_samples] while
             # preserving order
             select_from_cached = np.array(
-                  [np.where(self.indices_in_X == idx)[0][0] for idx in indices]
-            )
+                [np.where(self.indices_in_X == idx)[0][0] for idx in indices])
             assert len(select_from_cached) == len(indices)
             return self.X[select_from_cached], self.y[indices]
 
@@ -324,103 +323,3 @@ class KaggleDR(Dataset):
         self.X = np.array([self.prepare_image(self.load_image(fn)) for fn in
                            self.image_filenames[indices]])
         self.indices_in_X = indices
-
-
-class OptRetina(Dataset):
-    """
-    Provides access to FUNDUS images from OptRetina.
-
-    """
-
-    def __init__(self, path_data=None, filename_targets=None,
-                 preprocessing=KaggleDR.jf_trafo, exclude_path=None):
-        self.path_data = path_data
-        self.filename_targets = filename_targets
-        labels = pd.read_csv(self.filename_targets,
-                             dtype={'diseased': np.int32})
-
-        if exclude_path is not None:
-            labels = OptRetina.exclude_samples(exclude_path,
-                                               labels)
-
-        self.image_filenames = OptRetina.build_unique_filenames(labels)
-        self.extension = '.jpeg'
-        # we store all labels
-        self._y = np.array(labels['diseased'])
-        self._n_samples = len(self.y)
-        # we might cache some data later on
-        self.X = None
-        # because self.X might be a subset of the entire data set, we track
-        # wich samples we have cached
-        self.indices_in_X = None
-        self.preprocessing = preprocessing
-
-    @staticmethod
-    def exclude_samples(exclude_path, labels):
-        exclude_filenames = [fn.split('.')[0] for fn in
-                             os.listdir(exclude_path)]
-
-        images = labels.filename.apply(lambda fn: fn.split('.')[0]).values
-        centre_ids = labels.centre_id.values.astype(str)
-        filenames = pd.Series(['_'.join(centre_id_and_image) for
-                               centre_id_and_image in
-                               zip(centre_ids, images)])
-
-        return labels[~filenames.isin(exclude_filenames)]
-
-    @staticmethod
-    def build_unique_filenames(data_frame):
-        centre_ids = data_frame.centre_id.values.astype(str)
-        n_images = len(data_frame)
-        image_filenames = data_frame.filename.values
-
-        filenames = [''.join(parts).split('.')[0] for parts in
-                     zip(centre_ids, ['/linked/']*n_images, image_filenames)]
-
-        return np.array(filenames)
-
-    def load_batch(self, indices):
-        if self.indices_in_X is not None and self.X is not None:
-            # map indices [0, n_all_samples] to [0, n_stored_samples] while
-            # preserving order
-            select_from_cached = np.array(
-                  [np.where(self.indices_in_X == idx)[0][0] for idx in indices]
-            )
-            assert len(select_from_cached) == len(indices)
-            return self.X[select_from_cached], self.y[indices]
-
-        else:
-            X = np.array([self.prepare_image(self.load_image(fn)) for fn in
-                          self.image_filenames[indices]])
-            y = self.y[indices]
-            assert len(X) == len(y) == len(indices)
-            return X, y
-
-    def prepare_image(self, im):
-        """
-        Prepare image.
-
-        Parameters
-        ----------
-        im : numpy array, shape = (n_rows, n_columns, n_channels)
-
-        Returns
-        -------
-        processed image : numpy array, shape = (n_channels, n_rows, n_columns)
-                                       dtype = floatX
-
-        """
-
-        im = floatX(np.transpose(im, (2, 0, 1)))
-        return self.preprocessing(im)
-
-    def load_image(self, filename):
-        filename = self.build_absolute_filename(filename)
-        image = np.array(Image.open(filename))
-        assert len(image.shape) == 3, 'Suspicious image ' + filename
-        return image
-
-    def build_absolute_filename(self, filename):
-        return os.path.join(self.path_data, filename + self.extension)
-
-
