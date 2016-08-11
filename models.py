@@ -27,7 +27,7 @@ class JFnet(object):
 
     @staticmethod
     def build_model(input_var=None, width=512, height=512, filename=None,
-                    n_classes=5, batch_size=None):
+                    n_classes=5, batch_size=None, p_conv=0.0):
         """Setup network structure for the original formulation of JeffreyDF's
            network and optionally load pretrained weights
 
@@ -44,6 +44,8 @@ class JFnet(object):
             if filename is not None, weights are loaded from filename
         n_classes : Optional[int]
             default 5 for transfer learning on Kaggle DR data
+        batch_size : should only be set if all batches have the same size!
+        p_conv: dropout applied to conv. layers, by default turned off (0.0)
 
         Returns
         -------
@@ -72,71 +74,84 @@ class JFnet(object):
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['2'] = MaxPool2DLayer(net['1'], 3, stride=(2, 2))
+        net['1d'] = DropoutLayer(net['1'], p=p_conv)
+        net['2'] = MaxPool2DLayer(net['1d'], 3, stride=(2, 2))
         net['3'] = ConvLayer(net['2'], 32, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['4'] = ConvLayer(net['3'], 32, 3, stride=(1, 1), pad='same',
+        net['3d'] = DropoutLayer(net['3'], p=p_conv)
+        net['4'] = ConvLayer(net['3d'], 32, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['5'] = MaxPool2DLayer(net['4'], 3, stride=(2, 2))
+        net['4d'] = DropoutLayer(net['4'], p=p_conv)
+        net['5'] = MaxPool2DLayer(net['4d'], 3, stride=(2, 2))
         net['6'] = ConvLayer(net['5'], 64, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['7'] = ConvLayer(net['6'], 64, 3, stride=(1, 1), pad='same',
+        net['6d'] = DropoutLayer(net['6'], p=p_conv)
+        net['7'] = ConvLayer(net['6d'], 64, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['8'] = MaxPool2DLayer(net['7'], 3, stride=(2, 2))
+        net['7d'] = DropoutLayer(net['7'], p=p_conv)
+        net['8'] = MaxPool2DLayer(net['7d'], 3, stride=(2, 2))
         net['9'] = ConvLayer(net['8'], 128, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['10'] = ConvLayer(net['9'], 128, 3, stride=(1, 1), pad='same',
+        net['9d'] = DropoutLayer(net['9'], p=p_conv)
+        net['10'] = ConvLayer(net['9d'], 128, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['11'] = ConvLayer(net['10'], 128, 3, stride=(1, 1), pad='same',
+        net['10d'] = DropoutLayer(net['10'], p=p_conv)
+        net['11'] = ConvLayer(net['10d'], 128, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['12'] = ConvLayer(net['11'], 128, 3, stride=(1, 1), pad='same',
+        net['11d'] = DropoutLayer(net['11'], p=p_conv)
+        net['12'] = ConvLayer(net['11d'], 128, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['13'] = MaxPool2DLayer(net['12'], 3, stride=(2, 2))
+        net['12d'] = DropoutLayer(net['12'], p=p_conv)
+        net['13'] = MaxPool2DLayer(net['12d'], 3, stride=(2, 2))
         net['14'] = ConvLayer(net['13'], 256, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['15'] = ConvLayer(net['14'], 256, 3, stride=(1, 1), pad='same',
+        net['14d'] = DropoutLayer(net['14'], p=p_conv)
+        net['15'] = ConvLayer(net['14d'], 256, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
+        net['15d'] = DropoutLayer(net['15'], p=p_conv)
         net['16'] = ConvLayer(net['15'], 256, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['17'] = ConvLayer(net['16'], 256, 3, stride=(1, 1), pad='same',
+        net['16d'] = DropoutLayer(net['16'], p=p_conv)
+        net['17'] = ConvLayer(net['16d'], 256, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['18'] = MaxPool2DLayer(net['17'], 3, stride=(2, 2),
+        net['17d'] = DropoutLayer(net['17'], p=p_conv)
+        net['18'] = MaxPool2DLayer(net['17d'], 3, stride=(2, 2),
                                    name='coarse_last_pool')
         net['19'] = DropoutLayer(net['18'], p=0.5)
         net['20'] = DenseLayer(net['19'], num_units=1024, nonlinearity=None,
