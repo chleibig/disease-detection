@@ -1,7 +1,7 @@
 import numpy.testing as nt
 
 
-def test_jeffrey_df_ref():
+def test_jfnet():
     """Verify correct reimplementation of Jeffrey de Fauw's net"""
     import cPickle as pickle
     import sys
@@ -20,7 +20,7 @@ def test_jeffrey_df_ref():
     model_ref = pickle.load(open(filename_ref, 'r'))
     l_out_ref = model_ref['l_out']
 
-    network = models.jeffrey_df_ref(filename=filename, batch_size=64)
+    network = models.jfnet(filename=filename, batch_size=64)
     l_out = network['31']
 
     # check weights and biases for equality
@@ -34,7 +34,7 @@ def test_jeffrey_df_ref():
         assert l.output_shape == l_ref.output_shape
 
 
-def test_output_jeffrey_df():
+def test_output_jfnet():
     import numpy as np
     import theano
     import theano.tensor as T
@@ -44,8 +44,8 @@ def test_output_jeffrey_df():
     import models
 
     weights = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
-    network = models.jeffrey_df(width=512, height=512, filename=weights,
-                                untie_biases=True)
+    network = models.jfnet(width=512, height=512, filename=weights,
+                           untie_biases=True)
 
     expected = np.array([[9.38881755e-01, 5.23291342e-02, 8.59508850e-03,
                           1.34651185e-04, 5.94010562e-05],

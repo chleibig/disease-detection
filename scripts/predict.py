@@ -22,7 +22,7 @@ T = 100  # Number of MC dropout samples
 
 weights = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 
-network = models.jeffrey_df_ref(width=512, height=512, filename=weights)
+network = models.jfnet(width=512, height=512, filename=weights)
 
 network['0'].input_var = X
 network['22'].input_var = img_dim

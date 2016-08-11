@@ -119,9 +119,9 @@ for last_layer in ['9']:
 
     untie_biases = defaultdict(lambda: False, {512: True})
 
-    network = models.jeffrey_df(input_var=X, width=512, height=512,
-                                filename=weights_init, n_classes=5,
-                                untie_biases=untie_biases)
+    network = models.jfnet(input_var=X, width=512, height=512,
+                           filename=weights_init, n_classes=5,
+                           untie_biases=untie_biases)
 
     mean_pooled = lasagne.layers.GlobalPoolLayer(network[last_layer],
                                                  pool_function=T.mean)

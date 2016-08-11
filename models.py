@@ -23,8 +23,8 @@ from lasagne.layers import set_all_param_values
 from lasagne.nonlinearities import softmax, LeakyRectify
 
 
-def jeffrey_df_ref(input_var=None, width=512, height=512,
-                   filename=None, n_classes=5, batch_size=None):
+def jfnet(input_var=None, width=512, height=512, filename=None, n_classes=5,
+          batch_size=None):
     """Setup network structure for the original formulation of JeffreyDF's
        network and optionally load pretrained weights
 
