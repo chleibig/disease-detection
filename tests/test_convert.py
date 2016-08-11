@@ -2,8 +2,7 @@ import pytest
 
 
 @pytest.mark.parametrize("converter, ref_dir",
-                         [('o_O', 'tests/ref_data/KDR/sample_o_O_512'),
-                          ('JF', 'tests/ref_data/KDR/sample_JF_512')])
+                         [('JF', 'tests/ref_data/KDR/sample_JF_512')])
 def test_convert(converter, ref_dir, tmpdir):
     import os
     from PIL import Image
@@ -15,7 +14,7 @@ def test_convert(converter, ref_dir, tmpdir):
     extension = 'jpeg'
     n_proc = 4
 
-    converter_fun = 'convert_' + converter + '.py'
+    converter_fun = 'scripts/convert_' + converter + '.py'
 
     os.system(" ".join(["python", converter_fun,
                         "--directory", directory,
@@ -28,5 +27,3 @@ def test_convert(converter, ref_dir, tmpdir):
         ref_image = Image.open(os.path.join(ref_dir, filename))
         convert_image = Image.open(os.path.join(convert_directory, filename))
         nt.assert_array_equal(ref_image, convert_image)
-
-
