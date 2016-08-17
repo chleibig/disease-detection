@@ -41,7 +41,6 @@ dataset = 'KaggleDR'
 
 weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
 load_previous_weights = False
-best_auc = 0.0
 
 AUGMENTATION_PARAMS = {'featurewise_center': False,
                        'samplewise_center': False,
@@ -104,7 +103,7 @@ print('-' * 40)
 print('JFnet layers: ', last_layer)
 print('-' * 40)
 
-best_auc = 0.0
+best_auc = None
 
 ###########################################################################
 # Setup network
@@ -241,7 +240,7 @@ for epoch in range(n_epoch):
             progbar.add(Xb.shape[0], values=[("train loss", loss)])
             pos += Xb.shape[0]
 
-            if ((pos//batch_size) % (2500//batch_size)) == 0:
+            if ((pos//batch_size) % (1000//batch_size)) == 0:
                 gc.collect()
 
             if n_samples_inner == Xb_outer.shape[0]:
@@ -277,6 +276,8 @@ for epoch in range(n_epoch):
                          ("AUC (train)", auc_train),
                          ("loss (val.)", loss_val.mean()),
                          ("AUC (val.)", auc_val)])
+    if best_auc is None:
+        best_auc = auc_val
 
     if auc_val > best_auc:
         best_auc = auc_val
