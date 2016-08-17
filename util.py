@@ -66,7 +66,7 @@ class Progplot(object):
     bokeh serve
 
     The plot is then automatically shown in a new browser tab under
-    (http://localhost:5006/?bokeh-session-id=progplot by default) and updated
+    (http://localhost:5006/?bokeh-session-id=disease-detection by default) and updated
     every epoch. For remote access, use
         ssh -L [bind_address:]port:host:hostport]
 
@@ -91,7 +91,7 @@ class Progplot(object):
         -----
 
         The plot is served under:
-            http://localhost:port/?bokeh-session-id=progplot
+            http://localhost:port/?bokeh-session-id=disease-detection
 
         """
 
@@ -112,7 +112,7 @@ class Progplot(object):
         self.curdoc = bp.curdoc()
         # This line is crucial as it adds the necessary on change callbacks:
         self.curdoc.add_root(self.p)
-        self.session = bc.push_session(self.curdoc, session_id='progplot')
+        self.session = bc.push_session(self.curdoc, session_id='disease-detection')
         if show:
             self.session.show()
         self.show = show
