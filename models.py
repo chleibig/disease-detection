@@ -1,6 +1,10 @@
+from collections import OrderedDict
 import warnings
 import pickle
 import numpy as np
+
+import theano
+import theano.tensor as T
 import lasagne
 
 try:
@@ -23,19 +27,69 @@ from lasagne.layers import set_all_param_values
 from lasagne.nonlinearities import softmax, LeakyRectify
 
 
-class JFnet(object):
+class Model(object):
+    """Encapsulate Lasagne model
+
+    Note on concept
+    ===============
+
+    Variables are dicts which contain symbolic theano variables or lasagne
+    layers. Method arguments are typically actual data such as arrays.
+
+    """
+
+    def __init__(self, net=OrderedDict()):
+
+        self.net = net
+        self.inputs = OrderedDict([('X', T.tensor4('X'))])
+        self.targets = OrderedDict([('y', T.ivector('y'))])
+
+        self._predict = None
+        self._predict_stoch = None
+
+    def predict(self, *inputs):
+        """Forward pass"""
+        if self._predict is None:
+            self._predict = theano.function(self.inputs.values(),
+                lasagne.layers.get_output(self.net.values()[-1],
+                                          deterministic=True))
+        return self._predict(*inputs)
+
+    def mc_samples(self, *inputs, **kwargs):
+        """Stochastic forward passes to generate T MC samples"""
+        T = kwargs.pop('T', 100)
+        if kwargs:
+            raise TypeError('Unexpected **kwargs: %r' % kwargs)
+        if self._predict_stoch is None:
+            self._predict_stoch = theano.function(self.inputs.values(),
+                lasagne.layers.get_output(self.net.values()[-1],
+                                          deterministic=False))
+        n_samples = len(inputs[0])
+        n_out = self.net.values()[-1].output_shape[1]
+        mc_samples = np.zeros((n_samples, n_out, T))
+        for t in range(T):
+            mc_samples[:, :, t] = self._predict_stoch(*inputs)
+        return mc_samples
+
+
+class JFnet(Model):
+
+    def __init__(self, width=512, height=512):
+        weights = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
+        network = JFnet.build_model(width=width, height=height,
+                                    filename=weights)
+        super(JFnet, self).__init__(net=network)
+        self.inputs['X'] = self.net['0'].input_var
+        self.inputs['img_dim'] = self.net['22'].input_var
 
     @staticmethod
-    def build_model(input_var=None, width=512, height=512, filename=None,
+    def build_model(width=512, height=512, filename=None,
                     n_classes=5, batch_size=None, p_conv=0.0):
         """Setup network structure for the original formulation of JeffreyDF's
            network and optionally load pretrained weights
 
         Parameters
         ----------
-        input_var : Theano symbolic variable or `None` (default: `None`)
-            A variable representing a network input. If it is not provided, a
-            variable will be created.
         width : Optional[int]
             image width
         height : Optional[int]
@@ -65,10 +119,9 @@ class JFnet(object):
 
         """
 
-        net = {}
+        net = OrderedDict()
 
-        net['0'] = InputLayer((batch_size, 3, width, height),
-                              input_var=input_var, name='images')
+        net['0'] = InputLayer((batch_size, 3, width, height), name='images')
         net['1'] = ConvLayer(net['0'], 32, 7, stride=(2, 2), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
@@ -172,7 +225,6 @@ class JFnet(object):
         net['27'] = FeaturePoolLayer(net['26'], 2)
         net['28'] = DropoutLayer(net['27'], p=0.5)
         net['29'] = DenseLayer(net['28'],
-
                                num_units=n_classes * 2,
                                nonlinearity=None,
                                W=lasagne.init.Orthogonal(1.0),
@@ -189,16 +241,14 @@ class JFnet(object):
         return net
 
     @staticmethod
-    def get_img_dim(width, height, idx, n_samples):
+    def get_img_dim(width, height):
         """Second input to JFnet consumes image dimensions
 
         division by 700 according to https://github.com/JeffreyDF/
         kaggle_diabetic_retinopathy/blob/
         43e7f51d5f3b2e240516678894409332bb3767a8/generators.py::lines 41-42
         """
-        img_dim = np.vstack((width[idx:idx + n_samples],
-                             height[idx:idx + n_samples])).T / 700.
-        return img_dim
+        return np.vstack((width, height)).T / 700.
 
 
 def load_weights(layer, filename):
