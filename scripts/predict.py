@@ -1,76 +1,84 @@
-from __future__ import print_function, division
-
-import numpy as np
-import pandas as pd
-import theano
-import theano.tensor as T
-import lasagne
-from keras.utils.generic_utils import Progbar
-
-from datasets import KaggleDR
-from util import quadratic_weighted_kappa
-
-import cPickle as pickle
-from models import JFnet
+from __future__ import print_function
+import click
 
 
-X = T.tensor4('X')
-y = T.ivector('y')
-img_dim = T.matrix('img_dim')
+@click.command()
+@click.option('--mc_samples', default=100, show_default=True,
+              help="Number of MC dropout samples, usually called T.")
+@click.option('--dataset', default='KaggleDR_test', show_default=True,
+              help="Choose out of: ['KaggleDR_test', 'KaggleDR_train']")
+@click.option('--batch_size', default=512, show_default=True)
+@click.option('--out_file', default='{mc_samples}_mc_{dataset}_JFnet.pkl',
+              show_default=True)
+def main(mc_samples, dataset, batch_size, out_file):
+    """Perform and save stochastic forward passes"""
 
-T = 100  # Number of MC dropout samples
+    import cPickle as pickle
 
-weights = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
+    import numpy as np
+    import pandas as pd
+    import theano
+    from keras.utils.generic_utils import Progbar
 
-network = JFnet.build_model(width=512, height=512, filename=weights)
+    from datasets import KaggleDR
+    from models import JFnet
+    from util import quadratic_weighted_kappa
 
-network['0'].input_var = X
-network['22'].input_var = img_dim
-l_out = network['31']
+    jfmodel = JFnet(width=512, height=512)
 
-fname_labels = 'data/kaggle_dr/trainLabels_wh.csv'
+    if dataset == 'KaggleDR_test':
+        labels = 'data/kaggle_dr/retinopathy_solution_wh.csv'
 
-kdr = KaggleDR(path_data='data/kaggle_dr/train_JF_512',
-               filename_targets=fname_labels,
-               preprocessing=KaggleDR.jf_trafo)
+        ds = KaggleDR(path_data='data/kaggle_dr/test_JF_512',
+                      filename_targets=labels,
+                      preprocessing=KaggleDR.jf_trafo)
+        df = pd.read_csv(labels)
+        width = df.width.values.astype(theano.config.floatX)
+        height = df.height.values.astype(theano.config.floatX)
+    elif dataset == 'KaggleDR_train':
+        labels = 'data/kaggle_dr/trainLabels_wh.csv'
 
-df = pd.read_csv(fname_labels)
-width = df.width.values.astype(theano.config.floatX)
-height = df.height.values.astype(theano.config.floatX)
+        ds = KaggleDR(path_data='data/kaggle_dr/train_JF_512',
+                      filename_targets=labels,
+                      preprocessing=KaggleDR.jf_trafo)
+        df = pd.read_csv(labels)
+        width = df.width.values.astype(theano.config.floatX)
+        height = df.height.values.astype(theano.config.floatX)
+    else:
+        print('Unknown dataset, aborting.')
+        return
 
-det_fn = theano.function([X, img_dim],
-                         lasagne.layers.get_output(l_out,
-                                                   deterministic=True))
-stoch_fn = theano.function([X, img_dim],
-                           lasagne.layers.get_output(l_out,
-                                                     deterministic=False))
+    det_out = np.zeros((ds.n_samples, 5), dtype=np.float32)
+    stoch_out = np.zeros((ds.n_samples, 5, mc_samples), dtype=np.float32)
 
-det_out = np.zeros((kdr.n_samples, 5), dtype=np.float32)
-stoch_out = np.zeros((kdr.n_samples, 5, T), dtype=np.float32)
+    idx = 0
+    progbar = Progbar(ds.n_samples)
+    for X, _ in ds.iterate_minibatches(np.arange(ds.n_samples),
+                                       batch_size=batch_size,
+                                       shuffle=False):
 
-idx = 0
-progbar = Progbar(kdr.n_samples)
-for batch in kdr.iterate_minibatches(np.arange(kdr.n_samples),
-                                     batch_size=512, shuffle=False):
-    inputs, targets = batch
-    n_s = len(targets)
+        n_s = X.shape[0]
+        img_dim = JFnet.get_img_dim(width[idx:idx + n_s],
+                                    height[idx:idx + n_s])
+        det_out[idx:idx + n_s] = jfmodel.predict(X, img_dim)
+        stoch_out[idx:idx + n_s] = jfmodel.mc_samples(X, img_dim,
+                                                      T=mc_samples)
+        idx += n_s
+        progbar.add(n_s)
 
-    _img_dim = JFnet.get_img_dim(width, height, idx, n_s)
+    det_y_pred = np.argmax(det_out, axis=1)
+    det_acc = np.mean(np.equal(det_y_pred, ds.y))
+    det_kappa = quadratic_weighted_kappa(det_y_pred, ds.y, 5)
 
-    det_out[idx:idx + n_s] = det_fn(inputs, _img_dim)
-    for t in range(T):
-        stoch_out[idx:idx + n_s, :, t] = stoch_fn(inputs, _img_dim)
-    progbar.add(inputs.shape[0])
-    idx += n_s
+    results = {'det_out': det_out,
+               'stoch_out': stoch_out,
+               'det_kappa': det_kappa,
+               'det_acc': det_acc}
 
-det_y_pred = np.argmax(det_out, axis=1)
-det_acc = np.mean(np.equal(det_y_pred, kdr.y))
-det_kappa = quadratic_weighted_kappa(det_y_pred, kdr.y, 5)
+    if out_file == '{mc_samples}_mc_{dataset}_JFnet.pkl':
+        out_file.format(mc_samples=mc_samples, dataset=dataset)
+    with open(out_file, 'wb') as h:
+        pickle.dump(results, h)
 
-results = {'det_out': det_out,
-           'stoch_out': stoch_out,
-           'det_kappa': det_kappa,
-           'det_acc': det_acc}
-
-with open('jfnet_with_uncertainty_results_KaggleDR_train.pkl', 'wb') as h:
-    pickle.dump(results, h)
+if __name__ == '__main__':
+    main()
