@@ -116,7 +116,7 @@ def performance_over_uncertainty_tol(uncertainty, y, probs, measure):
     return uncertainty_tol, frac_retain, p, p_rand, p_strat
 
 
-def acc_rejection_figure(y, y_score, uncertainty, disease_onset,
+def acc_rejection_figure(y, y_score, uncertainties, disease_onset,
                          save=False, format='.svg'):
     plt.figure(figsize=A4_WIDTH_SQUARE)
     plt.suptitle('Accuracy under rejection (disease onset: {})'.format(
@@ -126,80 +126,86 @@ def acc_rejection_figure(y, y_score, uncertainty, disease_onset,
     error = (y_pred != y)
 
     plt.subplot(2, 2, 1)
-    sns.distplot(uncertainty[corr], label='correct')
-    sns.distplot(uncertainty[error], label='error')
+    for k, v in uncertainties.iteritems():
+        sns.distplot(v[corr], label=k + '[correct]')
+        sns.distplot(v[error], label=k + '[error]')
     plt.xlabel('model uncertainty')
     plt.ylabel('density')
     plt.legend(loc='best')
 
     plt.subplot(2, 2, 2)
-    bins = np.linspace(np.min(uncertainty), np.max(uncertainty), num=100)
-    sns.distplot(uncertainty[corr], bins=bins, kde=False, norm_hist=False,
-                 label='correct')
-    sns.distplot(uncertainty[error], bins=bins, kde=False, norm_hist=False,
-                 label='error')
+    for k, v in uncertainties.iteritems():
+        bins = np.linspace(np.min(v), np.max(v), num=100)
+        sns.distplot(v[corr], bins=bins, kde=False, norm_hist=False,
+                     label=k + '[correct]')
+        sns.distplot(v[error], bins=bins, kde=False, norm_hist=False,
+                     label=k + '[error]')
     plt.xlabel('model uncertainty')
     plt.ylabel('counts')
     plt.legend(loc='best')
 
-    uncertainty_tol, frac_retain, acc, acc_rand, acc_strat = \
-        performance_over_uncertainty_tol(uncertainty, y, y_score, accuracy)
+    ax223 = plt.subplot(2, 2, 3)
+    ax224 = plt.subplot(2, 2, 4)
 
-    plt.subplot(2, 2, 3)
-    plt.plot(uncertainty_tol, acc, label='dropout uncertainty')
-    plt.plot(uncertainty_tol, acc_rand, label='randomly rejected')
-    plt.plot(uncertainty_tol, acc_strat, label='prior preserved')
-    plt.xlabel('tolerated model uncertainty')
-    plt.ylabel('accuracy')
-    plt.legend(loc='best')
+    for k, v in uncertainties.iteritems():
+        v_tol, frac_retain, acc, acc_rand, acc_strat = \
+            performance_over_uncertainty_tol(v, y, y_score, accuracy)
+        ax223.plot(v_tol, acc, label=k)
+        ax224.plot(frac_retain, acc, label=k)
 
-    plt.subplot(2, 2, 4)
-    plt.plot(frac_retain, acc, label='dropout uncertainty')
-    plt.plot(frac_retain, acc_rand, label='randomly rejected')
-    plt.plot(frac_retain, acc_strat, label='prior preserved')
-    plt.xlabel('fraction of retained data')
-    plt.ylabel('accuracy')
-    plt.legend(loc='best')
+    ax223.set_xlabel('tolerated model uncertainty')
+    ax223.set_ylabel('accuracy')
+    ax223.legend(loc='best')
+
+    ax224.plot(frac_retain, acc_rand, label='randomly rejected')
+    ax224.plot(frac_retain, acc_strat, label='prior preserved')
+    ax224.set_xlabel('fraction of retained data')
+    ax224.set_ylabel('accuracy')
+    ax224.legend(loc='best')
 
     if save:
         plt.savefig('acc_' + str(disease_onset) + format)
 
 
-def roc_auc_rejection_figure(y, y_score, uncertainty, disease_onset,
+def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset,
                              save=False, format='.svg'):
     plt.figure(figsize=A4_WIDTH_SQUARE)
     plt.suptitle('ROC under rejection (disease onset: {})'.format(
                  disease_onset))
 
-    uncertainty_tol, frac_retain, auc, auc_rand, auc_strat = \
-        performance_over_uncertainty_tol(uncertainty, y, y_score,
-                                         roc_auc_score)
+    ax220 = plt.subplot2grid((2, 2), (0, 0))
+    ax221 = plt.subplot2grid((2, 2), (0, 1))
+    ax2223 = plt.subplot2grid((2, 2), (1, 0), colspan=2)
+    for k, v in uncertainties.iteritems():
+        v_tol, frac_retain, auc, auc_rand, auc_strat = \
+            performance_over_uncertainty_tol(v, y, y_score,
+                                             roc_auc_score)
 
-    plt.subplot2grid((2, 2), (0, 0))
-    plt.plot(uncertainty_tol, auc, label='dropout uncertainty')
-    plt.plot(uncertainty_tol, auc_rand, label='randomly rejected')
-    plt.plot(uncertainty_tol, auc_strat, label='prior preserved')
-    plt.xlabel('tolerated model uncertainty')
-    plt.ylabel('roc_auc')
-    plt.legend(loc='best')
+        ax220.plot(v_tol, auc, label=k)
+        ax221.plot(frac_retain, auc, label=k)
 
-    plt.subplot2grid((2, 2), (0, 1))
-    plt.plot(frac_retain, auc, label='dropout uncertainty')
-    plt.plot(frac_retain, auc_rand, label='randomly rejected')
-    plt.plot(frac_retain, auc_strat, label='prior preserved')
-    plt.xlabel('fraction of retained data')
-    plt.ylabel('roc_auc')
-    plt.legend(loc='best')
+        ax2223
+        fractions = [0.9, 0.8, 0.7]
+        for f in fractions:
+            thr = v_tol[frac_retain >= f][0]
+            roc_curve_plot(y[v <= thr],
+                           y_score[v <= thr],
+                           legend_prefix='%d%% data retained, %s' % (f * 100,
+                                                                     k))
 
-    plt.subplot2grid((2, 2), (1, 0), colspan=2)
+    ax220.set_xlabel('tolerated model uncertainty')
+    ax220.set_ylabel('roc_auc')
+    ax220.legend(loc='best')
+
+    ax221.plot(frac_retain, auc_rand, label='randomly rejected')
+    ax221.plot(frac_retain, auc_strat, label='prior preserved')
+    ax221.set_xlabel('fraction of retained data')
+    ax221.set_ylabel('roc_auc')
+    ax221.legend(loc='best')
+
+    ax2223
     roc_curve_plot(y, y_score, legend_prefix='without rejection',
                    plot_BDA=True)
-    fractions = [0.9, 0.8, 0.7]
-    for f in fractions:
-        thr = uncertainty_tol[frac_retain >= f][0]
-        roc_curve_plot(y[uncertainty <= thr],
-                       y_score[uncertainty <= thr],
-                       legend_prefix='{}% data retained'.format(f * 100))
 
     if save:
         plt.savefig('roc_' + str(disease_onset) + format)
@@ -227,17 +233,16 @@ def main():
     probs, probs_mc = load_predictions()
 
     disease_onset_levels = [1, 2, 3, 4]
-
     for dl in disease_onset_levels:
         y_bin, probs_bin, probs_mc_bin = detection_task(y, probs, probs_mc, dl)
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
-        acc_rejection_figure(y_bin, pred_mean, pred_std, dl,
-                             save=True, format='.png')
-        roc_auc_rejection_figure(y_bin, pred_mean, pred_std, dl,
-                                 save=True, format='.png')
-        class_conditional_uncertainty(y_bin, pred_std, dl,
-                                      save=True, format='.png')
+        uncertainties = {'pred_std': pred_std,
+                         '-|pred_mean - 0.5|': -np.abs(pred_mean - 0.5)}
 
+        acc_rejection_figure(y_bin, pred_mean, uncertainties, dl,
+                             save=True, format='.png')
+        roc_auc_rejection_figure(y_bin, pred_mean, uncertainties, dl,
+                                 save=True, format='.png')
 
 if __name__ == '__main__':
     main()
