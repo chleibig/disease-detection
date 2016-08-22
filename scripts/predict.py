@@ -76,7 +76,7 @@ def main(mc_samples, dataset, batch_size, out_file):
                'det_acc': det_acc}
 
     if out_file == '{mc_samples}_mc_{dataset}_JFnet.pkl':
-        out_file.format(mc_samples=mc_samples, dataset=dataset)
+        out_file = out_file.format(mc_samples=mc_samples, dataset=dataset)
     with open(out_file, 'wb') as h:
         pickle.dump(results, h)
 
