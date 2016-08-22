@@ -24,9 +24,8 @@ def load_labels():
 
 
 def load_predictions():
-    """Load test predictions obtained with scripts/predict.py,
-       e.g. based on commit 40d8265"""
-    with open('data/processed/40d8265_jfnet_100MCdropout_KaggleDR_test.pkl',
+    """Load test predictions obtained with scripts/predict.py"""
+    with open('data/processed/c9ade47_100_mc_KaggleDR_test_JFnet.pkl',
               'rb') as h:
         pred_test = pickle.load(h)
     probs = pred_test['det_out']
