@@ -81,6 +81,6 @@ def main(mc_samples, dataset, batch_size, out_file):
         pickle.dump(results, h)
 
 if __name__ == '__main__':
-   import sys
-   sys.path.append('.')    
-   main()
+    import sys
+    sys.path.append('.')
+    main()
