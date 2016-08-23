@@ -74,10 +74,11 @@ class Model(object):
 
 class JFnet(Model):
 
+    ORIGINAL_WEIGHTS = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
+
     def __init__(self, width=512, height=512):
-        weights = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
         network = JFnet.build_model(width=width, height=height,
-                                    filename=weights)
+                                    filename=JFnet.ORIGINAL_WEIGHTS)
         super(JFnet, self).__init__(net=network)
         self.inputs['X'] = self.net['0'].input_var
         self.inputs['img_dim'] = self.net['22'].input_var
@@ -249,6 +250,35 @@ class JFnet(Model):
         43e7f51d5f3b2e240516678894409332bb3767a8/generators.py::lines 41-42
         """
         return np.vstack((width, height)).T / 700.
+
+
+class JFnetMono(Model):
+
+    def __init__(self, p_conv=0.0, last_layer='13', weights=None,
+                 n_classes=2):
+        network = JFnet.build_model(width=512, height=512,
+                                    filename=JFnet.ORIGINAL_WEIGHTS,
+                                    p_conv=p_conv)
+        # remove unused layers
+        while not network.keys()[-1] == last_layer:
+            network.popitem(last=True)
+        # add new layers
+        mean_pooled = lasagne.layers.GlobalPoolLayer(network[last_layer],
+                                                     pool_function=T.mean)
+        max_pooled = lasagne.layers.GlobalPoolLayer(network[last_layer],
+                                                    pool_function=T.max)
+        network['global_pool'] = lasagne.layers.ConcatLayer([mean_pooled,
+                                                             max_pooled],
+                                                            axis=1)
+        network['logreg'] = DenseLayer(network['global_pool'],
+                                       num_units=n_classes,
+                                       nonlinearity=softmax)
+
+        if weights is not None:
+            load_weights(network['log_reg'], weights)
+
+        super(JFnet, self).__init__(net=network)
+        self.inputs['X'] = self.net['0'].input_var
 
 
 def load_weights(layer, filename):
