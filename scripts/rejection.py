@@ -11,6 +11,9 @@ from sklearn.metrics import roc_auc_score
 
 from util import roc_curve_plot
 
+from matplotlib import rcParams
+rcParams.update({'figure.autolayout': True})
+
 plt.ion()
 sns.set_context('paper', font_scale=1.4)
 
@@ -117,65 +120,50 @@ def performance_over_uncertainty_tol(uncertainty, y, probs, measure):
 
 
 def acc_rejection_figure(y, y_score, uncertainties, disease_onset,
-                         save=False, format='.svg'):
-    plt.figure(figsize=A4_WIDTH_SQUARE)
-    plt.suptitle('Accuracy under rejection (disease onset: {})'.format(
-                 disease_onset))
-    y_pred = argmax_labels(y_score)
-    corr = (y_pred == y)
-    error = (y_pred != y)
+                         save=False, format='.svg', fig=None):
+    if fig is None:
+        fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
+                                  A4_WIDTH_SQUARE[0] / 2.0))
 
-    plt.subplot(2, 2, 1)
-    for k, v in uncertainties.iteritems():
-        sns.distplot(v[corr], label=k + '[correct]')
-        sns.distplot(v[error], label=k + '[error]')
-    plt.xlabel('model uncertainty')
-    plt.ylabel('density')
-    plt.legend(loc='best')
-
-    plt.subplot(2, 2, 2)
-    for k, v in uncertainties.iteritems():
-        bins = np.linspace(np.min(v), np.max(v), num=100)
-        sns.distplot(v[corr], bins=bins, kde=False, norm_hist=False,
-                     label=k + '[correct]')
-        sns.distplot(v[error], bins=bins, kde=False, norm_hist=False,
-                     label=k + '[error]')
-    plt.xlabel('model uncertainty')
-    plt.ylabel('counts')
-    plt.legend(loc='best')
-
-    ax223 = plt.subplot(2, 2, 3)
-    ax224 = plt.subplot(2, 2, 4)
+    ax121 = plt.subplot(1, 2, 1)
+    ax122 = plt.subplot(1, 2, 2)
+    ax121.set_title('(a)')
+    ax122.set_title('(b)')
+    ax121.set_ylim(0.88, 1)
+    ax122.set_ylim(0.88, 1)
 
     for k, v in uncertainties.iteritems():
         v_tol, frac_retain, acc, acc_rand, acc_strat = \
             performance_over_uncertainty_tol(v, y, y_score, accuracy)
-        ax223.plot(v_tol, acc, label=k)
-        ax224.plot(frac_retain, acc, label=k)
+        ax121.plot(v_tol, acc, label=k)
+        ax122.plot(frac_retain, acc, label=k)
 
-    ax223.set_xlabel('tolerated model uncertainty')
-    ax223.set_ylabel('accuracy')
-    ax223.legend(loc='best')
+    ax121.set_xlabel('tolerated model uncertainty')
+    ax121.set_ylabel('accuracy')
+    ax121.legend(loc='best')
 
-    ax224.plot(frac_retain, acc_rand, label='randomly rejected')
-    ax224.plot(frac_retain, acc_strat, label='prior preserved')
-    ax224.set_xlabel('fraction of retained data')
-    ax224.set_ylabel('accuracy')
-    ax224.legend(loc='best')
+    ax122.plot(frac_retain, acc_rand, label='randomly rejected')
+    ax122.plot(frac_retain, acc_strat, label='prior preserved')
+    ax122.set_xlabel('fraction of retained data')
+    ax122.legend(loc='best')
 
     if save:
-        plt.savefig('acc_' + str(disease_onset) + format)
+        fig.savefig('acc_' + str(disease_onset) + format)
 
 
 def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset,
-                             save=False, format='.svg'):
-    plt.figure(figsize=A4_WIDTH_SQUARE)
-    plt.suptitle('ROC under rejection (disease onset: {})'.format(
-                 disease_onset))
+                             save=False, format='.svg', fig=None):
+    if fig is None:
+        fig = plt.figure(figsize=A4_WIDTH_SQUARE)
 
     ax220 = plt.subplot2grid((2, 2), (0, 0))
     ax221 = plt.subplot2grid((2, 2), (0, 1))
     ax2223 = plt.subplot2grid((2, 2), (1, 0), colspan=2)
+
+    ax220.set_title('(a)')
+    ax221.set_title('(b)')
+    ax2223.set_title('(c)')
+
     for k, v in uncertainties.iteritems():
         v_tol, frac_retain, auc, auc_rand, auc_strat = \
             performance_over_uncertainty_tol(v, y, y_score,
@@ -200,7 +188,6 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset,
     ax221.plot(frac_retain, auc_rand, label='randomly rejected')
     ax221.plot(frac_retain, auc_strat, label='prior preserved')
     ax221.set_xlabel('fraction of retained data')
-    ax221.set_ylabel('roc_auc')
     ax221.legend(loc='best')
 
     ax2223
@@ -208,7 +195,35 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset,
                    plot_BDA=True)
 
     if save:
-        plt.savefig('roc_' + str(disease_onset) + format)
+        fig.savefig('roc_' + str(disease_onset) + format)
+
+
+def error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
+                                  label='pred_std', save=False, format='.png',
+                                  ax=None):
+    """Plot conditional pdfs for correct and erroneous argmax predictions"""
+    if ax is None:
+        fig = plt.figure(figsize=A4_WIDTH_SQUARE)
+    else:
+        fig = plt.gcf()
+
+    y_pred = argmax_labels(y_score)
+    corr = (y_pred == y)
+    error = (y_pred != y)
+
+    ax = sns.kdeplot(uncertainty[corr], ax=ax, shade=True, cut=0,
+                     label=label + '[corr]')
+    ax = sns.kdeplot(uncertainty[error], ax=ax, shade=True, cut=0,
+                     label=label + '[error]')
+
+    ax.set_xlabel('model uncertainty')
+    ax.set_ylabel('density')
+    ax.legend(loc='best')
+
+    if save:
+        fig.savefig('error_cond_pdf_' + str(disease_onset) + format)
+
+    return ax
 
 
 def class_conditional_uncertainty(y, uncertainty, disease_onset,
@@ -232,15 +247,23 @@ def main():
     y = load_labels()
     probs, probs_mc = load_predictions()
 
-    disease_onset_levels = [1, 2, 3, 4]
+    disease_onset_levels = [1]
     for dl in disease_onset_levels:
         y_bin, probs_bin, probs_mc_bin = detection_task(y, probs, probs_mc, dl)
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
-        uncertainties = {'pred_std': pred_std,
-                         '-|pred_mean - 0.5|': -np.abs(pred_mean - 0.5)}
+        uncertainties = {'pred_std': pred_std}
+
+        fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
+                         A4_WIDTH_SQUARE[1] / 2.0))
+        ax = fig.gca()
+        ax.set_xlim(0, 0.275)
+        ax.set_ylim(0, 30)
+        error_conditional_uncertainty(y_bin, pred_mean, pred_std, dl,
+                                      label='pred_std', save=True, ax=ax)
 
         acc_rejection_figure(y_bin, pred_mean, uncertainties, dl,
                              save=True, format='.png')
+
         roc_auc_rejection_figure(y_bin, pred_mean, uncertainties, dl,
                                  save=True, format='.png')
 
