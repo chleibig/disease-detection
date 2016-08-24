@@ -3,11 +3,14 @@
    classified"""
 from __future__ import print_function
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import numpy as np
 import cPickle as pickle
+import os
 import pandas as pd
 import seaborn as sns
 from sklearn.metrics import roc_auc_score
+import statsmodels.nonparametric.api as smnp
 
 from util import roc_curve_plot
 
@@ -19,11 +22,19 @@ sns.set_context('paper', font_scale=1.4)
 
 A4_WIDTH_SQUARE = (8.27, 8.27)
 
+LABELS_FILE = 'data/kaggle_dr/retinopathy_solution.csv'
+IMAGE_PATH = 'data/kaggle_dr/test_JF_512'
+
 
 def load_labels():
-    df_test = pd.read_csv('data/kaggle_dr/retinopathy_solution.csv')
+    df_test = pd.read_csv(LABELS_FILE)
     y_test = df_test.level.values
     return y_test
+
+
+def load_filenames():
+    df_test = pd.read_csv(LABELS_FILE)
+    return df_test.image.values
 
 
 def load_predictions():
@@ -52,6 +63,17 @@ def detection_task(y, probs, probs_mc, disease_level):
     probs_diseased = binary_probs(probs, disease_level)
     probs_mc_diseased = binary_probs(probs_mc, disease_level)
     return y_diseased, probs_diseased, probs_mc_diseased
+
+
+def mode(data):
+    """Compute a kernel density estimate and return the mode"""
+    if len(np.unique(data)) == 1:
+        return data[0]
+    else:
+        kde = smnp.KDEUnivariate(data.astype('double'))
+        kde.fit(cut=0)
+        grid, y = kde.support, kde.density
+        return grid[y == y.max()][0]
 
 
 def posterior_statistics(probs_mc_bin):
@@ -199,13 +221,10 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset,
 
 
 def error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
-                                  label='pred_std', save=False, format='.png',
-                                  ax=None):
+                                  label='pred_std', ax=None):
     """Plot conditional pdfs for correct and erroneous argmax predictions"""
     if ax is None:
-        fig = plt.figure(figsize=A4_WIDTH_SQUARE)
-    else:
-        fig = plt.gcf()
+        ax = plt.figure(figsize=A4_WIDTH_SQUARE).gca()
 
     y_pred = argmax_labels(y_score)
     corr = (y_pred == y)
@@ -220,10 +239,63 @@ def error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
     ax.set_ylabel('density')
     ax.legend(loc='best')
 
-    if save:
-        fig.savefig('error_cond_pdf_' + str(disease_onset) + format)
-
     return ax
+
+
+def fig1(y, y_score, images, uncertainty, probs_mc_diseased, disease_onset,
+         label='$\sigma_{pred}$', save=False, format='.png'):
+    asc = np.argsort(uncertainty)
+    certain = 0
+    uncertain = len(y) - 1
+    middle_certain = np.where(uncertainty[asc] > 0.14)[0][0]
+    examples = [certain, middle_certain, uncertain]
+    fig = plt.figure(figsize=A4_WIDTH_SQUARE)
+    for idx, i in enumerate(examples):
+        im = mpimg.imread(os.path.join(IMAGE_PATH, images[asc][i] + '.jpeg'))
+
+        with sns.axes_style("white"):
+            plt.subplot2grid((2, 2 * len(examples)), (0, 2 * idx))
+            plt.title(['(a)', '(b)', '(c)'][idx], loc='left')
+            plt.imshow(im)
+            plt.axis('off')
+
+        plt.subplot2grid((2, 2 * len(examples)), (0, 2 * idx + 1))
+        if uncertainty[asc][i] <= 0.000:
+            color = sns.color_palette()[0]
+            plt.bar(0.98, 1.0, width=0.02, alpha=0.5, color=color)
+            plt.hlines(1.0, 0.98, 1.0, color=color, linewidth=2)
+        else:
+            sns.kdeplot(probs_mc_diseased[asc][i], shade=True)
+        y_pos = plt.gca().get_ylim()[1] / 2.0
+        plt.annotate(['"certain":\n $\sigma_{pred}$ = %.2f'
+                      % uncertainty[asc][i],
+                      '"uncertain":\n $\sigma_{pred}$ = %.2f'
+                      % uncertainty[asc][i],
+                      '"uncertain":\n $\sigma_{pred}$ = %.2f'
+                      % uncertainty[asc][i]][idx],
+                     (0.33, 0.75 * y_pos))
+        length = 0.5 * max(uncertainty[asc][i], 0.02)
+        arrow_params = {'length_includes_head': True,
+                        'width': 0.005 * y_pos,
+                        'head_width': 0.05 * y_pos,
+                        'head_length': 0.05}
+        plt.arrow(0.5, y_pos, length, 0, **arrow_params)
+        plt.arrow(0.5, y_pos, -length, 0, **arrow_params)
+        plt.xlabel('p(diseased | image)')
+        plt.ylabel('density')
+        plt.xlim(0, 1)
+        plt.gca().get_yaxis().set_visible(False)
+
+    ax = plt.subplot2grid((2, 2 * len(examples)), (1, 0),
+                          colspan=2 * len(examples))
+    ax.set_xlim(0, 0.35)
+    ax.set_ylim(0, 30)
+    ax.set_title('(c)', loc='left')
+    error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
+                                  label=label, ax=ax)
+
+    if save:
+        fig.savefig('figure1_' + str(disease_onset) + format)
 
 
 def class_conditional_uncertainty(y, uncertainty, disease_onset,
@@ -245,21 +317,20 @@ def class_conditional_uncertainty(y, uncertainty, disease_onset,
 
 def main():
     y = load_labels()
+    images = load_filenames()
     probs, probs_mc = load_predictions()
 
     disease_onset_levels = [1]
     for dl in disease_onset_levels:
         y_bin, probs_bin, probs_mc_bin = detection_task(y, probs, probs_mc, dl)
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
-        uncertainties = {'pred_std': pred_std}
+        uncertainties = {'$\sigma_{pred}$': pred_std}
 
-        fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
-                         A4_WIDTH_SQUARE[1] / 2.0))
-        ax = fig.gca()
-        ax.set_xlim(0, 0.275)
-        ax.set_ylim(0, 30)
-        error_conditional_uncertainty(y_bin, pred_mean, pred_std, dl,
-                                      label='pred_std', save=True, ax=ax)
+        fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin, dl,
+             label='$\sigma_{pred}$', save=True, format='.png')
+
+        import ipdb
+        ipdb.set_trace()
 
         acc_rejection_figure(y_bin, pred_mean, uncertainties, dl,
                              save=True, format='.png')
