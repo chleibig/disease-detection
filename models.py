@@ -1,6 +1,6 @@
 from collections import OrderedDict
 import warnings
-import pickle
+import cPickle as pickle
 import numpy as np
 
 import theano
@@ -275,9 +275,9 @@ class JFnetMono(Model):
                                        nonlinearity=softmax)
 
         if weights is not None:
-            load_weights(network['log_reg'], weights)
+            load_weights(network['logreg'], weights)
 
-        super(JFnet, self).__init__(net=network)
+        super(JFnetMono, self).__init__(net=network)
         self.inputs['X'] = self.net['0'].input_var
 
 
@@ -332,3 +332,15 @@ def save_weights(layer, filename):
 
     raise NotImplementedError('Format indicated by ending of {filename} not'
                               'implemented'.format(filename=filename))
+
+
+def load_model(filename):
+    """Load model with weights from pickle file"""
+    with open(filename, 'rb') as h:
+        return pickle.load(h)
+
+
+def save_model(model, filename):
+    """Dump model together with weights to pickle file"""
+    with open(filename, 'wb') as h:
+        pickle.dump(model, h)
