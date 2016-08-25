@@ -28,11 +28,11 @@ from util import SelectiveSampler
 from util import Progplot
 
 
-p = 0.5
+p = 0.2
 last_layer = '13'  # from JFnet
 batch_size = 32
 n_epoch = 30
-lr_schedule = {0: 0.0001, 1: 0.0001, 2: 0.0001, 3: 0.0001, 4: 0.0001, 5: 0.00001}
+lr_schedule = {0: 0.00001, 1: 0.00001, 2: 0.00001, 3: 0.00001, 4: 0.00001, 5: 0.000001}
 change_every = 5
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
@@ -108,9 +108,9 @@ best_auc = None
 ###########################################################################
 # Setup network
 
-network = JFnet.build_model(input_var=X, width=512, height=512,
+network = JFnet.build_model(width=512, height=512,
                             filename=weights_init, p_conv=p)
-
+network['0'].input_var = X
 mean_pooled = lasagne.layers.GlobalPoolLayer(network[last_layer],
                                              pool_function=T.mean)
 max_pooled = lasagne.layers.GlobalPoolLayer(network[last_layer],
