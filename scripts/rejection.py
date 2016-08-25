@@ -25,6 +25,10 @@ A4_WIDTH_SQUARE = (8.27, 8.27)
 LABELS_FILE = 'data/kaggle_dr/retinopathy_solution.csv'
 IMAGE_PATH = 'data/kaggle_dr/test_JF_512'
 
+TAG = {0: 'healthy', 1: 'diseased'}
+LEVEL = {0: 'no DR', 1: 'mild DR', 2: 'moderate DR', 3: 'severe DR',
+         4: 'proliferative DR'}
+
 
 def load_labels():
     df_test = pd.read_csv(LABELS_FILE)
@@ -242,8 +246,9 @@ def error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
     return ax
 
 
-def fig1(y, y_score, images, uncertainty, probs_mc_diseased, disease_onset,
-         label='$\sigma_{pred}$', save=False, format='.png'):
+def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
+         disease_onset, y_level, label='$\sigma_{pred}$',
+         save=False, format='.png'):
     asc = np.argsort(uncertainty)
     certain = 0
     uncertain = len(y) - 1
@@ -255,25 +260,28 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased, disease_onset,
 
         with sns.axes_style("white"):
             plt.subplot2grid((2, 2 * len(examples)), (0, 2 * idx))
-            plt.title(['(a)', '(b)', '(c)'][idx], loc='left')
             plt.imshow(im)
             plt.axis('off')
+            title = ['(a)', '(b)', '(c)'][idx] + ' ' + TAG[y[asc][i]]
+            level_info = ' (' + LEVEL[y_level[asc][i]] + ')'
+            print(title, level_info)
+            plt.title(title, loc='left')
 
-        plt.subplot2grid((2, 2 * len(examples)), (0, 2 * idx + 1))
+        ax = plt.subplot2grid((2, 2 * len(examples)), (0, 2 * idx + 1))
         if uncertainty[asc][i] <= 0.000:
             color = sns.color_palette()[0]
             plt.bar(0.98, 1.0, width=0.02, alpha=0.5, color=color)
             plt.hlines(1.0, 0.98, 1.0, color=color, linewidth=2)
         else:
             sns.kdeplot(probs_mc_diseased[asc][i], shade=True)
-        y_pos = plt.gca().get_ylim()[1] / 2.0
+        y_pos = ax.get_ylim()[1] / 2.0
         plt.annotate(['"certain":\n $\sigma_{pred}$ = %.2f'
                       % uncertainty[asc][i],
                       '"uncertain":\n $\sigma_{pred}$ = %.2f'
                       % uncertainty[asc][i],
                       '"uncertain":\n $\sigma_{pred}$ = %.2f'
                       % uncertainty[asc][i]][idx],
-                     (0.33, 0.75 * y_pos))
+                     (0.33, 0.7 * y_pos))
         length = 0.5 * max(uncertainty[asc][i], 0.02)
         arrow_params = {'length_includes_head': True,
                         'width': 0.005 * y_pos,
@@ -284,13 +292,14 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased, disease_onset,
         plt.xlabel('p(diseased | image)')
         plt.ylabel('density')
         plt.xlim(0, 1)
-        plt.gca().get_yaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        ax.set_aspect(1 / ax.get_ylim()[1])
 
     ax = plt.subplot2grid((2, 2 * len(examples)), (1, 0),
                           colspan=2 * len(examples))
     ax.set_xlim(0, 0.35)
     ax.set_ylim(0, 30)
-    ax.set_title('(c)', loc='left')
+    ax.set_title('(d)', loc='left')
     error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
                                   label=label, ax=ax)
 
@@ -326,9 +335,11 @@ def main():
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
         uncertainties = {'$\sigma_{pred}$': pred_std}
 
-        fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin, dl,
-             label='$\sigma_{pred}$', save=True, format='.png')
+        fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin, dl, y,
+             label='$\sigma_{pred}$', save=False, format='.png')
 
+        print('Please resize and save this figure to your needs,'
+              'then press "c"')
         import ipdb
         ipdb.set_trace()
 
