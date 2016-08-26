@@ -29,10 +29,10 @@ from util import Progplot
 
 
 p = 0.2
-last_layer = '13'  # from JFnet
+last_layer = '17'  # from JFnet
 batch_size = 32
 n_epoch = 30
-lr_schedule = {0: 0.00001, 1: 0.00001, 2: 0.00001, 3: 0.00001, 4: 0.00001, 5: 0.000001}
+lr_schedule = {0: 0.00001, 1: 0.00001, 2: 0.00001, 3: 0.00001, 4: 0.00001, 5: 0.00001}
 change_every = 5
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
