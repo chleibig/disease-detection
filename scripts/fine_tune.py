@@ -32,7 +32,7 @@ p = 0.2
 last_layer = '17'  # from JFnet
 batch_size = 32
 n_epoch = 30
-lr_schedule = {0: 0.005, 1: 0.005, 2: 0.005, 3: 0.005, 4: 0.001, 5: 0.001}
+lr_schedule = {0: 0.005, 1: 0.005, 2: 0.001, 3: 0.001, 4: 0.0005, 5: 0.0001}
 change_every = 5
 l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
@@ -86,12 +86,12 @@ if dataset == 'KaggleDR':
     ds = KaggleDR(path_data='data/kaggle_dr/train_JF_BG_' + str(size),
                   filename_targets='data/kaggle_dr/trainLabels_bin.csv',
                   preprocessing=KaggleDR.standard_normalize,
-                  require_both_eyes_same_label=True)
+                  require_both_eyes_same_label=False)
     ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_BG_' + str(size),
                        filename_targets='data/kaggle_dr/'
                                         'retinopathy_solution_bin.csv',
                        preprocessing=KaggleDR.standard_normalize,
-                       require_both_eyes_same_label=True)
+                       require_both_eyes_same_label=False)
     idx_train, idx_val = train_test_split(np.arange(ds.n_samples),
                                           stratify=ds.y,
                                           test_size=0.2,
