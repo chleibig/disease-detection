@@ -71,6 +71,9 @@ class Model(object):
             mc_samples[:, :, t] = self._predict_stoch(*inputs)
         return mc_samples
 
+    def get_output_layer(self):
+        return self.net.values()[-1]
+
 
 class JFnet(Model):
 
