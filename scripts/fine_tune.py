@@ -131,7 +131,15 @@ if load_previous_weights:
 
 predictions = lasagne.layers.get_output(l_out, deterministic=False)
 loss = lasagne.objectives.categorical_crossentropy(predictions, y)
-loss = loss.mean()
+
+def bayes_cross_entropy(y, ce_loss, n_classes):
+    """Dalyac et al. (2014), eq. (17)"""
+    priors = T.extra_ops.bincount(y) / y.shape[0]
+    weights = 1.0 / (priors[y] * y.shape[0] * n_classes)
+    bce_loss = ce_loss * weights
+    return bce_loss.sum()
+
+loss = bayes_cross_entropy(y, loss, n_classes)
 
 l2_penalty = l2_lambda * regularize_network_params(l_out, l2)
 l1_penalty = l1_lambda * regularize_layer_params(l_out, l1)
