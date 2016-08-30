@@ -1,12 +1,17 @@
 from abc import ABCMeta, abstractmethod
 import os
+import threading
+import warnings
+
+from keras.preprocessing.image import ImageDataGenerator
+from keras.preprocessing.image import img_to_array, array_to_img
+from keras import backend as K
+from lasagne.utils import floatX
 import numpy as np
 import pandas as pd
 from PIL import Image
-from lasagne.utils import floatX
 import theano
 import sklearn.cross_validation as skcv
-import warnings
 
 
 class Dataset(object):
@@ -323,3 +328,121 @@ class KaggleDR(Dataset):
         self.X = np.array([self.prepare_image(self.load_image(fn)) for fn in
                            self.image_filenames[indices]])
         self.indices_in_X = indices
+
+
+class DatasetImageDataGenerator(ImageDataGenerator):
+
+    def flow_from_dataset(self, dataset, indices,
+                          target_size=(512, 512),
+                          dim_ordering='default',
+                          batch_size=32,
+                          shuffle=True,
+                          seed=None,
+                          save_to_dir=None,
+                          save_prefix='',
+                          save_format='jpeg'):
+        return DatasetIterator(dataset, indices, self,
+                               target_size=target_size,
+                               dim_ordering=dim_ordering,
+                               batch_size=batch_size,
+                               shuffle=shuffle,
+                               seed=seed,
+                               save_to_dir=save_to_dir,
+                               save_prefix=save_prefix,
+                               save_format=save_format)
+
+
+class DatasetIterator(object):
+    """Inspired by keras.preprocessing.image.(NumpyArray)Iterator"""
+    def __init__(self, dataset, indices, image_data_generator,
+                 target_size=(512, 512),
+                 dim_ordering='default',
+                 batch_size=32, shuffle=True, seed=None,
+                 save_to_dir=None, save_prefix='', save_format='jpeg'):
+        self.dataset = dataset
+        self.indices = indices
+        self.image_data_generator = image_data_generator
+        self.target_size = tuple(target_size)
+        if dim_ordering == 'default':
+            dim_ordering = K.image_dim_ordering()
+        self.dim_ordering = dim_ordering
+        if self.dim_ordering == 'tf':
+            self.image_shape = self.target_size + (3,)
+        else:
+            self.image_shape = (3,) + self.target_size
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.batch_index = 0
+        self.total_batches_seen = 0
+        self.lock = threading.Lock()
+        self.index_generator = self._flow_index(indices, batch_size, shuffle,
+                                                seed)
+        self.save_to_dir = save_to_dir
+        self.save_prefix = save_prefix
+        self.save_format = save_format
+
+    def _flow_index(self, indices, batch_size=32, shuffle=False, seed=None):
+        self.batch_index = 0
+        while 1:
+            if self.batch_index == 0:
+                index_array = indices
+                N = len(index_array)
+                if shuffle:
+                    if seed is not None:
+                        np.random.seed(seed + self.total_batches_seen)
+                    np.random.shuffle(index_array)
+
+            current_index = (self.batch_index * batch_size) % N
+            if N >= current_index + batch_size:
+                current_batch_size = batch_size
+                self.batch_index += 1
+            else:
+                current_batch_size = N - current_index
+                self.batch_index = 0
+            self.total_batches_seen += 1
+            yield (index_array[current_index: current_index +
+                               current_batch_size],
+                   current_index, current_batch_size)
+
+    def __iter__(self):
+        # needed if we want to do something like:
+        # for x, y in data_gen.flow(...):
+        return self
+
+    def __next__(self, *args, **kwargs):
+        return self.next(*args, **kwargs)
+
+    def next(self):
+        # for python 2.x.
+        # Keeps under lock only the mechanism which advances
+        # the indexing of each batch
+        # see http://anandology.com/blog/using-iterators-and-generators/
+        with self.lock:
+            index_array, current_index, current_batch_size = \
+                next(self.index_generator)
+        # The transformation of images is not under thread lock so it can be
+        # done in parallel
+        batch_x = np.zeros((current_batch_size,) + self.image_shape)
+        for i, j in enumerate(index_array):
+            img = self.dataset.load_image(self.dataset.image_filenames[j])
+            x = img_to_array(img, dim_ordering=self.dim_ordering)
+            x = self.image_data_generator.random_transform(x)
+            x = self.image_data_generator.standardize(x)
+            # instead of via standardize we have our own preprocessing routine
+            # attached to the dataset with cached dataset statistics:
+            x = self.dataset.preprocessing(x)
+            batch_x[i] = x
+        if self.save_to_dir:
+            for i in range(current_batch_size):
+                img = array_to_img(batch_x[i], self.dim_ordering, scale=True)
+                fname = '{prefix}_{index}_{hash}.{format}'.format(
+                    prefix=self.save_prefix,
+                    index=current_index + i,
+                    hash=np.random.randint(1e4),
+                    format=self.save_format)
+                img.save(os.path.join(self.save_to_dir, fname))
+        if self.dataset.y is None:
+            return batch_x
+        batch_y = self.dataset.y[index_array]
+        return batch_x, batch_y
+
