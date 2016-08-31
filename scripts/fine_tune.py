@@ -1,7 +1,6 @@
 from __future__ import print_function, division
 
 import gc
-
 import pickle
 import time
 import numpy as np
@@ -15,9 +14,6 @@ from sklearn.metrics import roc_auc_score
 
 from keras.utils.generic_utils import Progbar
 
-from datasets import DatasetImageDataGenerator
-from training import generator_queue
-
 if __name__ == '__main__':
     import os
     os.sys.path.append('.')
@@ -25,9 +21,12 @@ if __name__ == '__main__':
 import models
 from models import JFnet, JFnetMono
 from datasets import KaggleDR
+from datasets import DatasetImageDataGenerator
+from training import generator_queue
 from util import Progplot
 
 # TODO:
+# - track true labels due to generator internal shuffling for correct train auc
 # - command line script with config files to run a whole set of configurations
 # - move as much code as possible to modules for easier reuse
 
@@ -62,25 +61,7 @@ AUGMENTATION_PARAMS = {'featurewise_center': False,
                        'vertical_flip': True,
                        'dim_ordering': 'th'}
 
-NO_AUGMENTATION_PARAMS = {'featurewise_center': False,
-                          'samplewise_center': False,
-                          'featurewise_std_normalization': False,
-                          'samplewise_std_normalization': False,
-                          'zca_whitening': False,
-                          'rotation_range': 0.,
-                          'width_shift_range': 0.,
-                          'height_shift_range': 0.,
-                          'shear_range': 0.,
-                          'zoom_range': 0.,
-                          'channel_shift_range': 0.,
-                          'fill_mode': 'nearest',
-                          'cval': 0.,
-                          'horizontal_flip': False,
-                          'vertical_flip': False,
-                          'dim_ordering': 'th'}
-
 datagen_aug = DatasetImageDataGenerator(**AUGMENTATION_PARAMS)
-datagen_no_aug = DatasetImageDataGenerator(**NO_AUGMENTATION_PARAMS)
 
 if dataset == 'KaggleDR':
     ds = KaggleDR(path_data='data/kaggle_dr/train_JF_BG_' + str(size),
@@ -168,7 +149,7 @@ N_DISEASED = np.sum(y_train == 1)
 IDX_HEALTHY = np.where(y_train == 0)[0]
 
 wait_time = 0.01  # in seconds
-multiprocessing = True
+multiprocessing = False
 data_gen_queue, _stop = generator_queue(datagen_aug.flow_from_dataset(
                                         ds, idx_train,
                                         target_size=(size, size),
@@ -176,7 +157,7 @@ data_gen_queue, _stop = generator_queue(datagen_aug.flow_from_dataset(
                                         shuffle=True,
                                         seed=seed),
                                         max_q_size=10,
-                                        nb_worker=2,
+                                        nb_worker=8,
                                         pickle_safe=multiprocessing)
 
 for epoch in range(n_epoch):
@@ -200,33 +181,29 @@ for epoch in range(n_epoch):
                     break
                 else:
                     time.sleep(wait_time)
-            try:
-                if samples_seen == 0:
-                    # check scale of parameter updates at the beginning of
-                    # each epoch.
-                    # TODO: refactor the following into a decorator?
-                    params_old = lasagne.layers.get_all_param_values(l_out)
-                    [loss, predictions] = train_iter[epoch // change_every](Xb, yb)
-                    params_new = lasagne.layers.get_all_param_values(l_out)
-                    params_scale = np.array([np.linalg.norm(p_old.ravel())
-                                             for p_old in params_old])
-                    updates_scale = np.array([np.linalg.norm((p_new -
-                                                              p_old).ravel())
-                                              for p_new, p_old in
-                                              zip(params_new, params_old)])
-                    print('update_scale/param_scale: ',
-                          np.divide(updates_scale, params_scale))
-                else:
-                    # Recompile training function if learning rate has changed
-                    [loss, predictions] = train_iter[epoch // change_every](Xb, yb)
-            except:
-                _stop.set()
-                raise
+            if samples_seen == 0:
+                # check scale of parameter updates at the beginning of
+                # each epoch.
+                # TODO: refactor the following into a decorator?
+                params_old = lasagne.layers.get_all_param_values(l_out)
+                [loss, predictions] = train_iter[epoch // change_every](Xb, yb)
+                params_new = lasagne.layers.get_all_param_values(l_out)
+                params_scale = np.array([np.linalg.norm(p_old.ravel())
+                                         for p_old in params_old])
+                updates_scale = np.array([np.linalg.norm((p_new -
+                                                          p_old).ravel())
+                                          for p_new, p_old in
+                                          zip(params_new, params_old)])
+                print('update_scale/param_scale: ',
+                      np.divide(updates_scale, params_scale))
+            else:
+                # Recompile training function if learning rate has changed
+                [loss, predictions] = train_iter[epoch // change_every](Xb, yb)
 
             loss_train[samples_seen:samples_seen + Xb.shape[0]] = loss
             predictions_train[samples_seen:samples_seen + Xb.shape[0]] = \
                 predictions
-
+            
             progbar.add(Xb.shape[0], values=[("train loss", loss)])
             samples_seen += Xb.shape[0]
 
