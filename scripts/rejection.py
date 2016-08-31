@@ -43,7 +43,7 @@ def load_filenames():
 
 def load_predictions():
     """Load test predictions obtained with scripts/predict.py"""
-    with open('data/processed/c9ade47_100_mc_KaggleDR_test_JFnet.pkl',
+    with open('data/processed/100_mc_KaggleDR_test_BayesJFnet17_392bea6.pkl',
               'rb') as h:
         pred_test = pickle.load(h)
     probs = pred_test['det_out']
@@ -155,15 +155,18 @@ def acc_rejection_figure(y, y_score, uncertainties, disease_onset,
     ax122 = plt.subplot(1, 2, 2)
     ax121.set_title('(a)')
     ax122.set_title('(b)')
-    ax121.set_ylim(0.88, 1)
-    ax122.set_ylim(0.88, 1)
 
+    min_acc = 1.0
     for k, v in uncertainties.iteritems():
         v_tol, frac_retain, acc, acc_rand, acc_strat = \
             performance_over_uncertainty_tol(v, y, y_score, accuracy)
         ax121.plot(v_tol, acc, label=k)
         ax122.plot(frac_retain, acc, label=k)
+        if min_acc > min(np.concatenate((acc, acc_rand, acc_strat))):
+            min_acc = min(np.concatenate((acc, acc_rand, acc_strat)))
 
+    ax121.set_ylim(min_acc, 1)
+    ax122.set_ylim(min_acc, 1)
     ax121.set_xlabel('tolerated model uncertainty')
     ax121.set_ylabel('accuracy')
     ax121.legend(loc='best')
@@ -297,8 +300,7 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
 
     ax = plt.subplot2grid((2, 2 * len(examples)), (1, 0),
                           colspan=2 * len(examples))
-    ax.set_xlim(0, 0.35)
-    ax.set_ylim(0, 30)
+
     ax.set_title('(d)', loc='left')
     error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
                                   label=label, ax=ax)
