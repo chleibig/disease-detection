@@ -43,7 +43,8 @@ def load_filenames():
 
 def load_predictions():
     """Load test predictions obtained with scripts/predict.py"""
-    with open('data/processed/100_mc_KaggleDR_test_BayesJFnet17_392bea6.pkl',
+    with open('data/processed/'
+              '100_mc_KaggleDR_test_BayesianJFnet17_onset2_b69aadd.pkl',
               'rb') as h:
         pred_test = pickle.load(h)
     probs = pred_test['det_out']
@@ -59,7 +60,13 @@ def binary_labels(labels, min_positive_level=1):
 
 
 def binary_probs(probs, min_positive_level=1):
-    return probs[:, min_positive_level:].sum(axis=1)
+    n_classes = probs.shape[1]
+    if n_classes == 5:
+        return probs[:, min_positive_level:].sum(axis=1)
+    elif n_classes == 2:
+        return np.squeeze(probs[:, 1:])
+    else:
+        print('Unknown number of classes: %d. Aborting.' % n_classes)
 
 
 def detection_task(y, probs, probs_mc, disease_level):
@@ -331,7 +338,7 @@ def main():
     images = load_filenames()
     probs, probs_mc = load_predictions()
 
-    disease_onset_levels = [1]
+    disease_onset_levels = [2]
     for dl in disease_onset_levels:
         y_bin, probs_bin, probs_mc_bin = detection_task(y, probs, probs_mc, dl)
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
