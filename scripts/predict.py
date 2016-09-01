@@ -3,18 +3,20 @@ import click
 
 
 @click.command()
-@click.option('--mc_samples', default=100, show_default=True,
+@click.option('--mc_samples', '-s', default=100, show_default=True,
               help="Number of MC dropout samples, usually called T.")
-@click.option('--dataset', default='KaggleDR_test', show_default=True,
-              help="Choose out of: ['KaggleDR_test', 'KaggleDR_train']")
-@click.option('--preprocessing', default='JF', show_default=True,
+@click.option('--dataset', '-d', default='KaggleDR_test', show_default=True,
+              help="Choose out of: ['KaggleDR_test', 'KaggleDR_train',"
+                   "'Messidor']")
+@click.option('--preprocessing', '-p', default='JF', show_default=True,
               help="Choose out of: ['JF', 'JF_BG']")
-@click.option('--normalization', default='jf_trafo', show_default=True,
+@click.option('--normalization', '-n', default='jf_trafo', show_default=True,
               help="Choose out of: ['jf_trafo', 'standard_normalize']")
-@click.option('--model', default='JFnet', show_default=True,
+@click.option('--model', '-m', default='JFnet', show_default=True,
               help="String 'JFnet' or a pickle file from models.save_model")
-@click.option('--batch_size', default=512, show_default=True)
-@click.option('--out_file', default='{mc_samples}_mc_{dataset}_{model}.pkl',
+@click.option('--batch_size', '-b', default=512, show_default=True)
+@click.option('--out_file', '-f',
+              default='{mc_samples}_mc_{dataset}_{model}.pkl',
               show_default=True)
 def main(mc_samples, dataset, preprocessing, normalization, model,
          batch_size, out_file):
@@ -29,16 +31,7 @@ def main(mc_samples, dataset, preprocessing, normalization, model,
     from keras.utils.generic_utils import Progbar
 
     import models
-    from datasets import KaggleDR
-    from util import quadratic_weighted_kappa
-
-    if model == 'JFnet':
-        model_name = model
-        model = models.JFnet(width=512, height=512)
-    else:
-        assert model.endswith('.pkl'), 'model is not a pickle file.'
-        model_name = model.split('.pkl')[0]
-        model = models.load_model(model)
+    from datasets import KaggleDR, Messidor
 
     if dataset == 'KaggleDR_test':
         images = 'test_' + preprocessing + '_512'
@@ -46,21 +39,32 @@ def main(mc_samples, dataset, preprocessing, normalization, model,
         ds = KaggleDR(path_data=os.path.join('data/kaggle_dr', images),
                       filename_targets=labels,
                       preprocessing=getattr(KaggleDR, normalization))
-        df = pd.read_csv(labels)
-        width = df.width.values.astype(theano.config.floatX)
-        height = df.height.values.astype(theano.config.floatX)
     elif dataset == 'KaggleDR_train':
         images = 'train_' + preprocessing + '_512'
         labels = 'data/kaggle_dr/trainLabels_wh.csv'
         ds = KaggleDR(path_data=os.path.join('data/kaggle_dr', images),
                       filename_targets=labels,
                       preprocessing=getattr(KaggleDR, normalization))
+    elif dataset == 'Messidor':
+        images = 'data/messidor/' + preprocessing + '_512'
+        labels = 'data/messidor/messidor_wh.csv'
+        ds = Messidor(path_data=images,
+                      filename_targets=labels,
+                      preprocessing=getattr(KaggleDR, normalization))
+    else:
+        print('Unknown dataset, aborting.')
+        return
+
+    if model == 'JFnet':
+        model_name = model
+        model = models.JFnet(width=512, height=512)
         df = pd.read_csv(labels)
         width = df.width.values.astype(theano.config.floatX)
         height = df.height.values.astype(theano.config.floatX)
     else:
-        print('Unknown dataset, aborting.')
-        return
+        assert model.endswith('.pkl'), 'model is not a pickle file.'
+        model_name = model.split('.pkl')[0]
+        model = models.load_model(model)
 
     n_out = model.net.values()[-1].output_shape[1]
 

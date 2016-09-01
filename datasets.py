@@ -1,4 +1,6 @@
+from __future__ import print_function
 from abc import ABCMeta, abstractmethod
+import glob
 import os
 import threading
 import warnings
@@ -328,6 +330,53 @@ class KaggleDR(Dataset):
         self.X = np.array([self.prepare_image(self.load_image(fn)) for fn in
                            self.image_filenames[indices]])
         self.indices_in_X = indices
+
+
+class Messidor(KaggleDR):
+
+    def __init__(self, path_data=None,
+                 filename_targets='data/messidor/messidor.csv',
+                 preprocessing=KaggleDR.standard_normalize):
+        super(Messidor, self).__init__(path_data=path_data,
+                                       filename_targets=filename_targets,
+                                       preprocessing=preprocessing,
+                                       require_both_eyes_same_label=False)
+
+    @staticmethod
+    def prepare_labels():
+        """ Prepare csv labels file from messidor's excel sheets
+
+        With the resulting labels file, one should be able to use Messidor data
+        the same way as KaggleDR data
+
+        """
+
+        labels_file = 'data/messidor/messidor.csv'
+
+        if os.path.exists(labels_file):
+            print(labels_file, 'already exists.')
+            labels = pd.read_csv(labels_file)
+            assert len(labels) == 1200
+            return labels
+
+        labels = pd.DataFrame({'image': pd.Series(dtype='str'),
+                               'level': pd.Series(dtype='int32')})
+        filenames = glob.glob('data/messidor/Annotation Base*.xls')
+        for fn in filenames:
+            df = pd.read_excel(fn, converters={'Retinopathy grade': np.int32})
+            chunk = pd.DataFrame(
+                {'image': df['Image name'].apply(lambda x: x.split('.tif')[0]),
+                 'level': df['Retinopathy grade']})
+            labels = labels.append(chunk)
+
+        assert len(labels) == 1200
+        labels.to_csv(labels_file, index=False)
+
+        return labels
+
+    @staticmethod
+    def contralateral_agreement(df):
+        raise NotImplementedError('Undefined for Messidor.')
 
 
 class DatasetImageDataGenerator(ImageDataGenerator):

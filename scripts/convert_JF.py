@@ -22,6 +22,9 @@ from PIL import Image
 import cv2
 
 
+white_list_extensions = ['jpg', 'jpeg', 'tif']
+
+
 def convert(fname, crop_size, enhance_contrast=False):
     """Refactored from JF's generators.load_image_and_process"""
     im = Image.open(fname, mode='r')
@@ -152,7 +155,7 @@ def main(directory, convert_directory, crop_size,
         pass
 
     filenames = [os.path.join(dp, f) for dp, dn, fn in os.walk(directory)
-                 for f in fn if f.endswith('jpeg') or f.endswith('jpg')]
+                 for f in fn if f.split('.')[-1] in white_list_extensions]
 
     assert filenames, "No valid filenames."
 
