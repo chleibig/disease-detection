@@ -87,14 +87,8 @@ def main(mc_samples, dataset, preprocessing, normalization, model,
         idx += n_s
         progbar.add(n_s)
 
-    det_y_pred = np.argmax(det_out, axis=1)
-    det_acc = np.mean(np.equal(det_y_pred, ds.y))
-    det_kappa = quadratic_weighted_kappa(det_y_pred, ds.y, n_out)
-
     results = {'det_out': det_out,
-               'stoch_out': stoch_out,
-               'det_kappa': det_kappa,
-               'det_acc': det_acc}
+               'stoch_out': stoch_out}
 
     if out_file == '{mc_samples}_mc_{dataset}_{model}.pkl':
         out_file = out_file.format(mc_samples=mc_samples,
