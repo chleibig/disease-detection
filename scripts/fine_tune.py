@@ -1,32 +1,34 @@
 from __future__ import print_function, division
 
 import gc
-
 import pickle
 import time
 import numpy as np
 import theano
 import theano.tensor as T
 import lasagne
-from lasagne.layers import DenseLayer
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.regularization import regularize_layer_params, l1
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics import roc_auc_score
 
 from keras.utils.generic_utils import Progbar
-from keras.preprocessing.image import ImageDataGenerator
 
 if __name__ == '__main__':
     import os
     os.sys.path.append('.')
 
 import models
-from models import JFnet
+from models import JFnet, JFnetMono
 from datasets import KaggleDR
-from util import SelectiveSampler
+from datasets import DatasetImageDataGenerator
+from training import generator_queue
 from util import Progplot
 
+
+# TODO:
+# - command line script with config files to run a whole set of configurations
+# - move as much code as possible to modules for easier reuse
 
 p = 0.2
 last_layer = '17'  # from JFnet
@@ -38,9 +40,9 @@ l2_lambda = 0.001  # entire network
 l1_lambda = 0.001  # only last layer
 size = 512
 dataset = 'KaggleDR'
+seed = 1234
 
-weights_init = 'models/jeffrey_df/2015_07_17_123003_PARAMSDUMP.pkl'
-load_previous_weights = False
+previous_weights = None
 
 AUGMENTATION_PARAMS = {'featurewise_center': False,
                        'samplewise_center': False,
@@ -59,43 +61,22 @@ AUGMENTATION_PARAMS = {'featurewise_center': False,
                        'vertical_flip': True,
                        'dim_ordering': 'th'}
 
-NO_AUGMENTATION_PARAMS = {'featurewise_center': False,
-                          'samplewise_center': False,
-                          'featurewise_std_normalization': False,
-                          'samplewise_std_normalization': False,
-                          'zca_whitening': False,
-                          'rotation_range': 0.,
-                          'width_shift_range': 0.,
-                          'height_shift_range': 0.,
-                          'shear_range': 0.,
-                          'zoom_range': 0.,
-                          'channel_shift_range': 0.,
-                          'fill_mode': 'nearest',
-                          'cval': 0.,
-                          'horizontal_flip': False,
-                          'vertical_flip': False,
-                          'dim_ordering': 'th'}
-
-datagen_aug = ImageDataGenerator(**AUGMENTATION_PARAMS)
-datagen_no_aug = ImageDataGenerator(**NO_AUGMENTATION_PARAMS)
-
-X = T.tensor4('X')
-y = T.ivector('y')
+datagen_aug = DatasetImageDataGenerator(**AUGMENTATION_PARAMS)
 
 if dataset == 'KaggleDR':
     ds = KaggleDR(path_data='data/kaggle_dr/train_JF_BG_' + str(size),
-                  filename_targets='data/kaggle_dr/trainLabels_bin.csv',
+                  filename_targets='data/kaggle_dr/trainLabels_01vs234.csv',
                   preprocessing=KaggleDR.standard_normalize,
                   require_both_eyes_same_label=False)
     ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_BG_' + str(size),
                        filename_targets='data/kaggle_dr/'
-                                        'retinopathy_solution_bin.csv',
+                                        'retinopathy_solution_01vs234.csv',
                        preprocessing=KaggleDR.standard_normalize,
                        require_both_eyes_same_label=False)
     idx_train, idx_val = train_test_split(np.arange(ds.n_samples),
                                           stratify=ds.y,
                                           test_size=0.2,
-                                          random_state=1234)
+                                          random_state=seed)
 
 n_classes = len(np.unique(ds.y))
 
@@ -108,29 +89,19 @@ best_auc = None
 ###########################################################################
 # Setup network
 
-network = JFnet.build_model(width=512, height=512,
-                            filename=weights_init, p_conv=p)
-network['0'].input_var = X
-mean_pooled = lasagne.layers.GlobalPoolLayer(network[last_layer],
-                                             pool_function=T.mean)
-max_pooled = lasagne.layers.GlobalPoolLayer(network[last_layer],
-                                            pool_function=T.max)
-network['global_pool'] = lasagne.layers.ConcatLayer([mean_pooled, max_pooled],
-                                                    axis=1)
-network['logreg'] = DenseLayer(network['global_pool'],
-                               num_units=n_classes,
-                               nonlinearity=lasagne.nonlinearities.softmax)
-l_out = network['logreg']
+model = JFnetMono(p_conv=p, last_layer=last_layer, weights=None, n_classes=2)
 
-if load_previous_weights:
-    models.load_weights(l_out, 'best_weights.npz')
+l_out = model.get_output_layer()
+X = model.inputs['X']
+y = model.targets['y']
+
+if previous_weights is not None:
+    models.load_weights(l_out, previous_weights)
 ###########################################################################
 
 ###########################################################################
 # Theano functions
 
-predictions = lasagne.layers.get_output(l_out, deterministic=False)
-loss = lasagne.objectives.categorical_crossentropy(predictions, y)
 
 def bayes_cross_entropy(y, ce_loss, n_classes):
     """Dalyac et al. (2014), eq. (17)"""
@@ -139,6 +110,8 @@ def bayes_cross_entropy(y, ce_loss, n_classes):
     bce_loss = ce_loss * weights
     return bce_loss.sum()
 
+predictions = lasagne.layers.get_output(l_out, deterministic=False)
+loss = lasagne.objectives.categorical_crossentropy(predictions, y)
 loss = bayes_cross_entropy(y, loss, n_classes)
 
 l2_penalty = l2_lambda * regularize_network_params(l_out, l2)
@@ -147,9 +120,9 @@ loss = loss + l2_penalty + l1_penalty
 
 predictions_det = lasagne.layers.get_output(l_out, deterministic=True)
 loss_det = lasagne.objectives.categorical_crossentropy(predictions_det, y)
-loss_det = loss_det.mean()
+loss_det = bayes_cross_entropy(y, loss_det, n_classes)
 
-params = lasagne.layers.get_all_params(network['logreg'], trainable=True)
+params = lasagne.layers.get_all_params(l_out, trainable=True)
 train_iter = {k: theano.function([X, y], [loss, predictions],
                                  updates=lasagne.updates.nesterov_momentum(
                                  loss, params,
@@ -172,7 +145,16 @@ progplot = Progplot(n_epoch, "epochs (batch_size " + str(batch_size) + ")",
 y_train = ds.y[idx_train]
 N_DISEASED = np.sum(y_train == 1)
 IDX_HEALTHY = np.where(y_train == 0)[0]
-selective_sampler = SelectiveSampler(M=N_DISEASED, y=y_train)
+
+wait_time = 0.01  # in seconds
+data_gen_queue, _stop = generator_queue(datagen_aug.flow_from_dataset(
+                                        ds, idx_train,
+                                        target_size=(size, size),
+                                        batch_size=batch_size,
+                                        shuffle=True,
+                                        seed=seed),
+                                        max_q_size=10,
+                                        nb_worker=8)
 
 for epoch in range(n_epoch):
     print('-' * 40)
@@ -180,56 +162,28 @@ for epoch in range(n_epoch):
     print('-' * 40)
     print("Training...")
 
-    if True:
-        print('Select all training data...')
-        selection = np.arange(len(idx_train))
-        np.random.shuffle(selection)
-    else:
-        print('Prediction on diseased images for selective sampling...')
-        progbar = Progbar(len(IDX_HEALTHY))
-        probs_neg = np.zeros((len(IDX_HEALTHY),))
-        pos = 0
-        for Xb, _ in ds.iterate_minibatches(idx_train[IDX_HEALTHY],
-                                            batch_size,
-                                            shuffle=False):
-            prob_neg = pred_iter(Xb)[:, 0]
-            probs_neg[pos:pos + Xb.shape[0]] = prob_neg
-            progbar.add(Xb.shape[0],
-                        values=[("prob_neg", prob_neg.mean())])
-            pos += Xb.shape[0]
-        selection = selective_sampler.sample(probs_neg=probs_neg,
-                                             shuffle=True)
+    samples_per_epoch = len(idx_train)
+    progbar = Progbar(samples_per_epoch)
+    loss_train = np.zeros((samples_per_epoch,))
+    predictions_train = np.zeros((samples_per_epoch, 2))
+    labels_train = np.zeros((samples_per_epoch,))  # track due to shuffling
 
-    progbar = Progbar(len(selection))
-    loss_train = np.zeros((len(selection),))
-    predictions_train = np.zeros((len(selection), 2))
-    y_train_sel = ds.y[idx_train[selection]]
-    pos = 0
-    bs_outer = batch_size * 5
-    for Xb_outer, yb_outer in ds.iterate_minibatches(idx_train[selection],
-                                                     batch_size=bs_outer,
-                                                     shuffle=False):
-        augment_data = np.random.randint(2)  # augment 50 % of the data
-        if augment_data:
-            datagen = datagen_aug
-        else:
-            datagen = datagen_no_aug
-
-        n_samples_inner = 0
-        for Xb, yb in datagen.flow(Xb_outer, yb_outer,
-                                   batch_size=batch_size,
-                                   shuffle=False,
-                                   seed=None,
-                                   save_to_dir=None):
-            Xb = Xb.astype('float32', copy=False)
-            n_samples_inner += Xb.shape[0]
-            if n_samples_inner > Xb_outer.shape[0]:
-                Warning('Generated more samples than we provided as '
-                        'input.')
-
-            if (pos % 40000) == 0:
+    samples_seen = 0
+    while samples_seen < samples_per_epoch:
+            Xb = yb = None
+            while not _stop.is_set():
+                if not data_gen_queue.empty():
+                    Xb, yb = data_gen_queue.get()
+                    Xb = Xb.astype('float32')
+                    break
+                else:
+                    time.sleep(wait_time)
+            if samples_seen == 0:
+                # check scale of parameter updates at the beginning of
+                # each epoch.
+                # TODO: refactor the following into a decorator?
                 params_old = lasagne.layers.get_all_param_values(l_out)
-                [loss, predictions] = train_iter[epoch//change_every](Xb, yb)
+                [loss, predictions] = train_iter[epoch // change_every](Xb, yb)
                 params_new = lasagne.layers.get_all_param_values(l_out)
                 params_scale = np.array([np.linalg.norm(p_old.ravel())
                                          for p_old in params_old])
@@ -240,21 +194,26 @@ for epoch in range(n_epoch):
                 print('update_scale/param_scale: ',
                       np.divide(updates_scale, params_scale))
             else:
-                [loss, predictions] = train_iter[epoch//change_every](Xb, yb)
+                # Recompile training function if learning rate has changed
+                [loss, predictions] = train_iter[epoch // change_every](Xb, yb)
 
-            loss_train[pos:pos + Xb.shape[0]] = loss
-            predictions_train[pos:pos + Xb.shape[0]] = predictions
+            loss_train[samples_seen:samples_seen + Xb.shape[0]] = loss
+            predictions_train[samples_seen:samples_seen + Xb.shape[0]] = \
+                predictions
+            labels_train[samples_seen:samples_seen + Xb.shape[0]] = yb
 
             progbar.add(Xb.shape[0], values=[("train loss", loss)])
-            pos += Xb.shape[0]
+            samples_seen += Xb.shape[0]
 
-            if ((pos//batch_size) % (1000//batch_size)) == 0:
+            if samples_seen > samples_per_epoch:
+                Warning('Generated more samples (%d) than expected per epoch'
+                        ' (%d).' % (samples_seen, samples_per_epoch))
+
+            if ((samples_seen // batch_size) % (1000 // batch_size)) == 0:
                 gc.collect()
 
-            if n_samples_inner == Xb_outer.shape[0]:
-                break  # datagen.flow loop is an infinite generator
     print('Training loss: ', loss_train.mean())
-    auc_train = roc_auc_score(y_train_sel, predictions_train[:, 1])
+    auc_train = roc_auc_score(labels_train, predictions_train[:, 1])
     print('Training AUC: ', auc_train)
 
     print('-' * 40)
@@ -289,8 +248,10 @@ for epoch in range(n_epoch):
 
     if auc_val > best_auc:
         best_auc = auc_val
-        print('Saving currently best weights...')
+        print('Saving current best weights...')
         models.save_weights(l_out, 'best_weights' + last_layer + '.npz')
+
+_stop.set()
 
 print("Training took {:.3g} sec.".format(time.time() - start_time))
 
@@ -328,6 +289,3 @@ res = {'history': progplot.y,
        'pred_test': predictions_test,
        'param values': lasagne.layers.get_all_param_values(l_out)}
 pickle.dump(res, open('results' + last_layer + '.pkl', 'wb'))
-
-
-

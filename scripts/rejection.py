@@ -307,7 +307,6 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
 
     ax = plt.subplot2grid((2, 2 * len(examples)), (1, 0),
                           colspan=2 * len(examples))
-
     ax.set_title('(d)', loc='left')
     error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
                                   label=label, ax=ax)
