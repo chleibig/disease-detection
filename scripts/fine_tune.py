@@ -149,7 +149,6 @@ N_DISEASED = np.sum(y_train == 1)
 IDX_HEALTHY = np.where(y_train == 0)[0]
 
 wait_time = 0.01  # in seconds
-multiprocessing = False
 data_gen_queue, _stop = generator_queue(datagen_aug.flow_from_dataset(
                                         ds, idx_train,
                                         target_size=(size, size),
@@ -157,8 +156,7 @@ data_gen_queue, _stop = generator_queue(datagen_aug.flow_from_dataset(
                                         shuffle=True,
                                         seed=seed),
                                         max_q_size=10,
-                                        nb_worker=8,
-                                        pickle_safe=multiprocessing)
+                                        nb_worker=8)
 
 for epoch in range(n_epoch):
     print('-' * 40)
@@ -203,7 +201,7 @@ for epoch in range(n_epoch):
             loss_train[samples_seen:samples_seen + Xb.shape[0]] = loss
             predictions_train[samples_seen:samples_seen + Xb.shape[0]] = \
                 predictions
-            
+
             progbar.add(Xb.shape[0], values=[("train loss", loss)])
             samples_seen += Xb.shape[0]
 
@@ -254,8 +252,6 @@ for epoch in range(n_epoch):
         models.save_weights(l_out, 'best_weights' + last_layer + '.npz')
 
 _stop.set()
-if multiprocessing:
-    data_gen_queue.close()
 
 print("Training took {:.3g} sec.".format(time.time() - start_time))
 

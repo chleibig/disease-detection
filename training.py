@@ -8,7 +8,7 @@ import numpy as np
 
 
 def generator_queue(generator, max_q_size=10,
-                    wait_time=0.05, nb_worker=1, pickle_safe=True):
+                    wait_time=0.05, nb_worker=1, pickle_safe=False):
     """Builds a queue out of a data generator.
     If pickle_safe, use a multiprocessing approach. Else, use threading.
     """
