@@ -65,12 +65,12 @@ datagen_aug = DatasetImageDataGenerator(**AUGMENTATION_PARAMS)
 
 if dataset == 'KaggleDR':
     ds = KaggleDR(path_data='data/kaggle_dr/train_JF_BG_' + str(size),
-                  filename_targets='data/kaggle_dr/trainLabels_bin.csv',
+                  filename_targets='data/kaggle_dr/trainLabels_01vs234.csv',
                   preprocessing=KaggleDR.standard_normalize,
                   require_both_eyes_same_label=False)
     ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_BG_' + str(size),
                        filename_targets='data/kaggle_dr/'
-                                        'retinopathy_solution_bin.csv',
+                                        'retinopathy_solution_01vs234.csv',
                        preprocessing=KaggleDR.standard_normalize,
                        require_both_eyes_same_label=False)
     idx_train, idx_val = train_test_split(np.arange(ds.n_samples),
