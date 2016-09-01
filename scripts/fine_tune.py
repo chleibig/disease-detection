@@ -25,8 +25,8 @@ from datasets import DatasetImageDataGenerator
 from training import generator_queue
 from util import Progplot
 
+
 # TODO:
-# - track true labels due to generator internal shuffling for correct train auc
 # - command line script with config files to run a whole set of configurations
 # - move as much code as possible to modules for easier reuse
 
@@ -168,6 +168,7 @@ for epoch in range(n_epoch):
     progbar = Progbar(samples_per_epoch)
     loss_train = np.zeros((samples_per_epoch,))
     predictions_train = np.zeros((samples_per_epoch, 2))
+    labels_train = np.zeros((samples_per_epoch,))  # track due to shuffling
 
     samples_seen = 0
     while samples_seen < samples_per_epoch:
@@ -201,6 +202,7 @@ for epoch in range(n_epoch):
             loss_train[samples_seen:samples_seen + Xb.shape[0]] = loss
             predictions_train[samples_seen:samples_seen + Xb.shape[0]] = \
                 predictions
+            labels_train[samples_seen:samples_seen + Xb.shape[0]] = yb
 
             progbar.add(Xb.shape[0], values=[("train loss", loss)])
             samples_seen += Xb.shape[0]
@@ -213,7 +215,7 @@ for epoch in range(n_epoch):
                 gc.collect()
 
     print('Training loss: ', loss_train.mean())
-    auc_train = roc_auc_score(ds.y[idx_train], predictions_train[:, 1])
+    auc_train = roc_auc_score(labels_train, predictions_train[:, 1])
     print('Training AUC: ', auc_train)
 
     print('-' * 40)
