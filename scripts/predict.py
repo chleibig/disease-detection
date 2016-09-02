@@ -7,7 +7,7 @@ import click
               help="Number of MC dropout samples, usually called T.")
 @click.option('--dataset', '-d', default='KaggleDR_test', show_default=True,
               help="Choose out of: ['KaggleDR_test', 'KaggleDR_train',"
-                   "'Messidor']")
+                   "'Messidor', 'Messidor_R0vsR1']")
 @click.option('--preprocessing', '-p', default='JF', show_default=True,
               help="Choose out of: ['JF', 'JF_BG']")
 @click.option('--normalization', '-n', default='jf_trafo', show_default=True,
@@ -45,9 +45,14 @@ def main(mc_samples, dataset, preprocessing, normalization, model,
         ds = KaggleDR(path_data=os.path.join('data/kaggle_dr', images),
                       filename_targets=labels,
                       preprocessing=getattr(KaggleDR, normalization))
-    elif dataset == 'Messidor':
+    elif 'Messidor' in dataset:
         images = 'data/messidor/' + preprocessing + '_512'
-        labels = 'data/messidor/messidor_wh.csv'
+        if dataset == 'Messidor':
+            labels = 'data/messidor/messidor_wh.csv'
+        elif dataset == 'Messidor_R0vsR1':
+            labels = 'data/messidor/messidor_R0vsR1.csv'
+        else:
+            print('Unknown dataset, aborting.')
         ds = Messidor(path_data=images,
                       filename_targets=labels,
                       preprocessing=getattr(KaggleDR, normalization))

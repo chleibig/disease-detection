@@ -356,23 +356,33 @@ class Messidor(KaggleDR):
         if os.path.exists(labels_file):
             print(labels_file, 'already exists.')
             labels = pd.read_csv(labels_file)
-            assert len(labels) == 1200
-            return labels
-
-        labels = pd.DataFrame({'image': pd.Series(dtype='str'),
-                               'level': pd.Series(dtype='int32')})
-        filenames = glob.glob('data/messidor/Annotation Base*.xls')
-        for fn in filenames:
-            df = pd.read_excel(fn, converters={'Retinopathy grade': np.int32})
-            chunk = pd.DataFrame(
-                {'image': df['Image name'].apply(lambda x: x.split('.tif')[0]),
-                 'level': df['Retinopathy grade']})
-            labels = labels.append(chunk)
+        else:
+            labels = pd.DataFrame({'image': pd.Series(dtype='str'),
+                                   'level': pd.Series(dtype='int32')})
+            filenames = glob.glob('data/messidor/Annotation*Base*.xls')
+            for fn in filenames:
+                df = pd.read_excel(fn, converters={'Retinopathy grade': np.int32})
+                chunk = pd.DataFrame(
+                    {'image': df['Image name'].apply(lambda x: x.split('.tif')[0]),
+                     'level': df['Retinopathy grade']})
+                labels = labels.append(chunk)
+            labels.to_csv(labels_file, index=False)
 
         assert len(labels) == 1200
-        labels.to_csv(labels_file, index=False)
 
-        return labels
+        labels_file_R0vsR1 = 'data/messidor/messidor_R0vsR1.csv'
+
+        if os.path.exists(labels_file_R0vsR1):
+            print(labels_file_R0vsR1, 'already exists.')
+            labels_ROvsR1 = pd.read_csv(labels_file_R0vsR1)
+
+        else:
+            labels_ROvsR1 = labels[(labels.level == 0) | (labels.level == 1)]
+            labels_ROvsR1.to_csv(labels_file_R0vsR1, index=False)
+
+        assert len(labels_ROvsR1) == 699
+
+        return labels, labels_ROvsR1
 
     @staticmethod
     def contralateral_agreement(df):
