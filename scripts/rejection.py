@@ -34,6 +34,10 @@ def config(dataset):
         IMAGE_PATH = 'data/messidor/JF_512'
         LEVEL = {0: 'no DR', 1: 'mild non-proliferative DR',
                  2: 'severe non-proliferative DR', 3: 'most serious'}
+    elif dataset == 'Messidor_R0vsR1':
+        LABELS_FILE = 'data/messidor/messidor_R0vsR1.csv'
+        IMAGE_PATH = 'data/messidor/JF_512'
+        LEVEL = {0: 'no DR', 1: 'mild non-proliferative DR'}
     else:
         print('Unknown dataset:', dataset)
         return
