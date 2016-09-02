@@ -21,31 +21,40 @@ plt.ion()
 sns.set_context('paper', font_scale=1.4)
 
 A4_WIDTH_SQUARE = (8.27, 8.27)
-
-LABELS_FILE = 'data/kaggle_dr/retinopathy_solution.csv'
-IMAGE_PATH = 'data/kaggle_dr/test_JF_512'
-
 TAG = {0: 'healthy', 1: 'diseased'}
-LEVEL = {0: 'no DR', 1: 'mild DR', 2: 'moderate DR', 3: 'severe DR',
-         4: 'proliferative DR'}
+
+def config(dataset):
+    if dataset == 'KaggleDR':
+        LABELS_FILE = 'data/kaggle_dr/retinopathy_solution.csv'
+        IMAGE_PATH = 'data/kaggle_dr/test_JF_512'
+        LEVEL = {0: 'no DR', 1: 'mild DR', 2: 'moderate DR', 3: 'severe DR',
+                 4: 'proliferative DR'}
+    elif dataset == 'Messidor':
+        LABELS_FILE = 'data/messidor/messidor.csv'
+        IMAGE_PATH = 'data/messidor/JF_512'
+        LEVEL = {0: 'no DR', 1: 'mild non-proliferative DR',
+                 2: 'severe non-proliferative DR', 3: 'most serious'}
+    else:
+        print('Unknown dataset:', dataset)
+        return
+
+    return LABELS_FILE, IMAGE_PATH, LEVEL
 
 
-def load_labels():
-    df_test = pd.read_csv(LABELS_FILE)
+def load_labels(labels_file):
+    df_test = pd.read_csv(labels_file)
     y_test = df_test.level.values
     return y_test
 
 
-def load_filenames():
-    df_test = pd.read_csv(LABELS_FILE)
+def load_filenames(labels_file):
+    df_test = pd.read_csv(labels_file)
     return df_test.image.values
 
 
-def load_predictions():
+def load_predictions(filename):
     """Load test predictions obtained with scripts/predict.py"""
-    with open('data/processed/'
-              '100_mc_KaggleDR_test_BayesianJFnet17_onset2_b69aadd.pkl',
-              'rb') as h:
+    with open(filename, 'rb') as h:
         pred_test = pickle.load(h)
     probs = pred_test['det_out']
     probs_mc = pred_test['stoch_out']
@@ -132,7 +141,7 @@ def stratified_mask(y, y_prior, shuffle=False):
 
 
 def performance_over_uncertainty_tol(uncertainty, y, probs, measure):
-    uncertainty_tol = np.linspace(np.percentile(uncertainty, 10),
+    uncertainty_tol = np.linspace(np.percentile(uncertainty, 50),
                                   uncertainty.max(),
                                   100)
     p = np.zeros_like(uncertainty_tol)
@@ -258,7 +267,7 @@ def error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
 
 def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
          disease_onset, y_level, label='$\sigma_{pred}$',
-         save=False, format='.png'):
+         save=False, format='.png', image_path=None, level=None):
     asc = np.argsort(uncertainty)
     certain = 0
     uncertain = len(y) - 1
@@ -266,14 +275,14 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
     examples = [certain, middle_certain, uncertain]
     fig = plt.figure(figsize=A4_WIDTH_SQUARE)
     for idx, i in enumerate(examples):
-        im = mpimg.imread(os.path.join(IMAGE_PATH, images[asc][i] + '.jpeg'))
+        im = mpimg.imread(os.path.join(image_path, images[asc][i] + '.jpeg'))
 
         with sns.axes_style("white"):
             plt.subplot2grid((2, 2 * len(examples)), (0, 2 * idx))
             plt.imshow(im)
             plt.axis('off')
             title = ['(a)', '(b)', '(c)'][idx] + ' ' + TAG[y[asc][i]]
-            level_info = ' (' + LEVEL[y_level[asc][i]] + ')'
+            level_info = ' (' + level[y_level[asc][i]] + ')'
             print(title, level_info)
             plt.title(title, loc='left')
 
@@ -333,18 +342,23 @@ def class_conditional_uncertainty(y, uncertainty, disease_onset,
 
 
 def main():
-    y = load_labels()
-    images = load_filenames()
-    probs, probs_mc = load_predictions()
 
-    disease_onset_levels = [2]
+    LABELS_FILE, IMAGE_PATH, LEVEL = config('Messidor')
+    y = load_labels(LABELS_FILE)
+    images = load_filenames(LABELS_FILE)
+    probs, probs_mc = load_predictions(
+        'data/processed/100_mc_Messidor_BayesJFnet17_392bea6.pkl')
+
+    disease_onset_levels = [1]
     for dl in disease_onset_levels:
         y_bin, probs_bin, probs_mc_bin = detection_task(y, probs, probs_mc, dl)
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
         uncertainties = {'$\sigma_{pred}$': pred_std}
 
         fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin, dl, y,
-             label='$\sigma_{pred}$', save=False, format='.png')
+             label='$\sigma_{pred}$', save=False, format='.png',
+             image_path=IMAGE_PATH,
+             level=LEVEL)
 
         print('Please resize and save this figure to your needs,'
               'then press "c"')
