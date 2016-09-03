@@ -71,6 +71,35 @@ class Model(object):
             mc_samples[:, :, t] = self._predict_stoch(*inputs)
         return mc_samples
 
+    def ensemble_prediction(self, *inputs, **kwargs):
+        """Predictions from a range of networks, thinned due to dropout
+
+        Facilitates to reproduce the same dropout predictions across multiple
+        runs.
+
+        """
+        seed = kwargs.pop('seed', 1234)
+        networks = kwargs.pop('networks', range(100))
+        if kwargs:
+            raise TypeError('Unexpected **kwargs: %r' % kwargs)
+
+        rng = lasagne.random.get_rng()
+
+        if self._predict_stoch is None:
+            self._predict_stoch = theano.function(self.inputs.values(),
+                lasagne.layers.get_output(self.net.values()[-1],
+                                          deterministic=False))
+        n_samples = len(inputs[0])
+        n_out = self.net.values()[-1].output_shape[1]
+        predictions = np.zeros((n_samples, n_out, len(networks)))
+        for i, t in enumerate(networks):
+            # select network, identified by random state
+            lasagne.random.set_rng(np.random.RandomState(seed + t))
+            predictions[:, :, i] = self._predict_stoch(*inputs)
+
+        lasagne.random.set_rng(rng)  # reset back to original state
+        return predictions
+
     def get_output_layer(self):
         return self.net.values()[-1]
 
