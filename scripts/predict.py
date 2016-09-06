@@ -3,8 +3,11 @@ import click
 
 
 @click.command()
-@click.option('--mc_samples', '-s', default=100, show_default=True,
-              help="Number of MC dropout samples, usually called T.")
+@click.option('--method', '-me', type=click.Choice(['mc_samples',
+                                                   'ensemble_prediction']),
+              help='* mc_samples: Draw T=100 MC dropout samples.\n'
+                   '* ensemble_prediction: Always draw from the same '
+                   'networks=range(100).')
 @click.option('--dataset', '-d', default='KaggleDR_test', show_default=True,
               help="Choose out of: ['KaggleDR_test', 'KaggleDR_train',"
                    "'Messidor', 'Messidor_R0vsR1']")
@@ -12,13 +15,13 @@ import click
               help="Choose out of: ['JF', 'JF_BG']")
 @click.option('--normalization', '-n', default='jf_trafo', show_default=True,
               help="Choose out of: ['jf_trafo', 'standard_normalize']")
-@click.option('--model', '-m', default='JFnet', show_default=True,
+@click.option('--model', '-mo', default='JFnet', show_default=True,
               help="String 'JFnet' or a pickle file from models.save_model")
 @click.option('--batch_size', '-b', default=512, show_default=True)
 @click.option('--out_file', '-f',
-              default='{mc_samples}_mc_{dataset}_{model}.pkl',
+              default='{method}_{dataset}_{model}.pkl',
               show_default=True)
-def main(mc_samples, dataset, preprocessing, normalization, model,
+def main(method, dataset, preprocessing, normalization, model,
          batch_size, out_file):
     """Perform and save stochastic forward passes"""
 
@@ -72,9 +75,27 @@ def main(mc_samples, dataset, preprocessing, normalization, model,
         model = models.load_model(model)
 
     n_out = model.net.values()[-1].output_shape[1]
+    n_pred = 100
+
+    if method == 'mc_samples':
+        def compute_stoch_out(*inputs):
+            return model.mc_samples(*inputs, T=n_pred)
+    elif method == 'ensemble_prediction':
+        def compute_stoch_out(*inputs):
+            batch_size = len(inputs[0])
+            batch_predictions = np.zeros((batch_size, n_out, n_pred),
+                                         dtype=np.float32)
+            for i in range(batch_size):
+                batch_i = [input[i][None, :] for input in inputs]
+                batch_predictions[i] = model.ensemble_prediction(*batch_i,
+                                                        networks=range(n_pred))
+            return batch_predictions
+    else:
+        print('Unknown method, aborting.')
+
 
     det_out = np.zeros((ds.n_samples, n_out), dtype=np.float32)
-    stoch_out = np.zeros((ds.n_samples, n_out, mc_samples), dtype=np.float32)
+    stoch_out = np.zeros((ds.n_samples, n_out, n_pred), dtype=np.float32)
 
     idx = 0
     progbar = Progbar(ds.n_samples)
@@ -91,16 +112,15 @@ def main(mc_samples, dataset, preprocessing, normalization, model,
             inputs = [X]
 
         det_out[idx:idx + n_s] = model.predict(*inputs)
-        stoch_out[idx:idx + n_s] = model.mc_samples(*inputs,
-                                                    T=mc_samples)
+        stoch_out[idx:idx + n_s] = compute_stoch_out(*inputs)
         idx += n_s
         progbar.add(n_s)
 
     results = {'det_out': det_out,
                'stoch_out': stoch_out}
 
-    if out_file == '{mc_samples}_mc_{dataset}_{model}.pkl':
-        out_file = out_file.format(mc_samples=mc_samples,
+    if out_file == '{method}_{dataset}_{model}.pkl':
+        out_file = out_file.format(method=method,
                                    dataset=dataset,
                                    model=model_name)
     with open(out_file, 'wb') as h:

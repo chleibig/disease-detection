@@ -46,6 +46,8 @@ class Model(object):
 
         self._predict = None
         self._predict_stoch = None
+        self._srngs = None  # Dropout layer random streams for ensemble pred.
+        self._model_seed = None
 
     def predict(self, *inputs):
         """Forward pass"""
@@ -83,22 +85,39 @@ class Model(object):
         if kwargs:
             raise TypeError('Unexpected **kwargs: %r' % kwargs)
 
-        rng = lasagne.random.get_rng()
+        assert len(inputs[0]) == 1, 'Please supply just one sample!'
+
+        # Check that all random streams are set up correctly
+        if self._srngs is None or (self._model_seed != seed):
+            self._setup_random_streams(seed)
 
         if self._predict_stoch is None:
-            self._predict_stoch = theano.function(self.inputs.values(),
-                lasagne.layers.get_output(self.net.values()[-1],
-                                          deterministic=False))
-        n_samples = len(inputs[0])
-        n_out = self.net.values()[-1].output_shape[1]
-        predictions = np.zeros((n_samples, n_out, len(networks)))
+            self._predict_stoch = theano.function(
+                inputs=self.inputs.values(),
+                outputs=lasagne.layers.get_output(self.net.values()[-1],
+                                                  deterministic=False))
+        # 3. loop over subnetwork predictions and adjust all random states
+        #    in between
+        n_out = self.get_output_layer().output_shape[1]
+        predictions = np.zeros((1, n_out, len(networks)))
         for i, t in enumerate(networks):
-            # select network, identified by random state
-            lasagne.random.set_rng(np.random.RandomState(seed + t))
+            [rng.seed(rng.layer_seed + t) for rng in self._srngs]
             predictions[:, :, i] = self._predict_stoch(*inputs)
 
-        lasagne.random.set_rng(rng)  # reset back to original state
         return predictions
+
+    def _setup_random_streams(self, seed):
+        # 1. collect all dropout layer random streams
+        srngs = [layer._srng for layer in self.net.values()
+                 if isinstance(layer, DropoutLayer)]
+        # 2. seed each dropout layer differently but in a reproducable way
+        for rng in srngs:
+            # same strategy as used by lasagne's DropoutLayer
+            layer_seed = np.random.RandomState(seed).randint(1, 2147462579)
+            rng.seed(layer_seed)
+            rng.layer_seed = layer_seed
+        self._srngs = srngs
+        self._model_seed = seed
 
     def get_output_layer(self):
         return self.net.values()[-1]

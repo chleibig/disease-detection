@@ -1,4 +1,6 @@
-import numpy.testing as nt
+import pytest
+import numpy
+import theano
 
 
 # def test_jfnet():
@@ -41,28 +43,62 @@ import numpy.testing as nt
 #         assert l.output_shape == l_ref.output_shape
 
 
-def test_output_jfnet():
-    import numpy as np
+class TestJFnet:
+    def test_output_jfnet(self):
+        import numpy as np
 
-    from datasets import KaggleDR
-    from models import JFnet
+        from datasets import KaggleDR
+        from models import JFnet
 
-    jfmodel = JFnet(width=512, height=512)
+        jfmodel = JFnet(width=512, height=512)
 
-    probas = np.array([[9.38881755e-01, 5.23291342e-02, 8.59508850e-03,
-                        1.34651185e-04, 5.94010562e-05],
-                       [9.19074774e-01, 6.69652745e-02, 1.35666728e-02,
-                        2.82015972e-04, 1.11185553e-04]], dtype=np.float32)
+        probas = np.array([[9.38881755e-01, 5.23291342e-02, 8.59508850e-03,
+                            1.34651185e-04, 5.94010562e-05],
+                           [9.19074774e-01, 6.69652745e-02, 1.35666728e-02,
+                            2.82015972e-04, 1.11185553e-04]], dtype=np.float32)
 
-    kdr = KaggleDR(path_data='tests/ref_data/KDR/sample_JF_512',
-                   filename_targets='tests/ref_data/KDR/sampleLabels.csv',
-                   preprocessing=KaggleDR.jf_trafo)
+        kdr = KaggleDR(path_data='tests/ref_data/KDR/sample_JF_512',
+                       filename_targets='tests/ref_data/KDR/sampleLabels.csv',
+                       preprocessing=KaggleDR.jf_trafo)
 
-    X, _ = next(kdr.iterate_minibatches(np.arange(kdr.n_samples),
-                                        batch_size=2,
-                                        shuffle=False))
-    width = height = np.array(X.shape[0] * [512], dtype=np.float32)
+        X, _ = next(kdr.iterate_minibatches(np.arange(kdr.n_samples),
+                                            batch_size=2,
+                                            shuffle=False))
+        width = height = np.array(X.shape[0] * [512], dtype=np.float32)
 
-    probas_pred = jfmodel.predict(X, JFnet.get_img_dim(width, height))
+        probas_pred = jfmodel.predict(X, JFnet.get_img_dim(width, height))
 
-    nt.assert_array_almost_equal(probas, probas_pred)
+        assert numpy.allclose(probas, probas_pred)
+
+
+class TestModel:
+
+    @pytest.fixture
+    def net(self):
+        from collections import OrderedDict
+        from lasagne.layers.input import InputLayer
+        from lasagne.layers.noise import DropoutLayer
+        net = OrderedDict()
+        net[0] = InputLayer((None, 100))
+        net[1] = DropoutLayer(net[0])
+        net[2] = DropoutLayer(net[1])
+        return net
+
+    @pytest.fixture
+    def model(self, net):
+        from models import Model
+        model = Model(net)
+        model.inputs['X'] = net[0].input_var
+        return model
+
+    def test_ensemble_prediction(self, model):
+        x = numpy.ones((1, 100)).astype('float32')
+
+        pred07 = model.ensemble_prediction(x, networks=[0, 7])
+        pred7 = model.ensemble_prediction(x, networks=[7])
+        pred7_seed_change = model.ensemble_prediction(x, networks=[7], seed=42)
+
+        assert pred07.shape == (1, 100, 2)
+        assert pred7.shape == (1, 100, 1)
+        assert numpy.allclose(pred07[0, :, 1], pred7[0, :, 0])
+        assert not numpy.allclose(pred7, pred7_seed_change)
