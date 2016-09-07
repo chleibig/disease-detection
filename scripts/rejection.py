@@ -25,32 +25,27 @@ A4_WIDTH_SQUARE = (8.27, 8.27)
 TAG = {0: 'healthy', 1: 'diseased'}
 
 
-def config(dataset):
-    if dataset == 'KaggleDR':
-        LABELS_FILE = 'data/kaggle_dr/retinopathy_solution.csv'
-        IMAGE_PATH = 'data/kaggle_dr/test_JF_512'
-        LEVEL = OrderedDict([(0, 'no DR'),
-                             (1, 'mild DR'),
-                             (2, 'moderate DR'),
-                             (3, 'severe DR'),
-                             (4, 'proliferative DR')])
-    elif dataset == 'Messidor':
-        LABELS_FILE = 'data/messidor/messidor.csv'
-        IMAGE_PATH = 'data/messidor/JF_512'
-        LEVEL = OrderedDict([(0, 'no DR'),
-                             (1, 'mild non-proliferative DR'),
-                             (2, 'severe non-proliferative DR'),
-                             (3, 'most serious')])
-    elif dataset == 'Messidor_R0vsR1':
-        LABELS_FILE = 'data/messidor/messidor_R0vsR1.csv'
-        IMAGE_PATH = 'data/messidor/JF_512'
-        LEVEL = OrderedDict([(0, 'no DR'),
-                             (1, 'mild non-proliferative DR')])
-    else:
-        print('Unknown dataset:', dataset)
-        return
-
-    return LABELS_FILE, IMAGE_PATH, LEVEL
+CONFIG = {'KaggleDR':
+                     {'LABELS_FILE': 'data/kaggle_dr/retinopathy_solution.csv',
+                      'IMAGE_PATH': 'data/kaggle_dr/test_JF_512',
+                      'LEVEL': OrderedDict([(0, 'no DR'),
+                                            (1, 'mild DR'),
+                                            (2, 'moderate DR'),
+                                            (3, 'severe DR'),
+                                            (4, 'proliferative DR')])},
+          'Messidor':
+                     {'LABELS_FILE': 'data/messidor/messidor.csv',
+                      'IMAGE_PATH': 'data/messidor/JF_512',
+                      'LEVEL': OrderedDict([(0, 'no DR'),
+                                            (1, 'mild non-proliferative DR'),
+                                            (2, 'severe non-proliferative DR'),
+                                            (3, 'most serious')])},
+          'Messidor_R0vsR1':
+                            {'LABELS_FILE': 'data/messidor/messidor_R0vsR1.csv',
+                             'IMAGE_PATH': 'data/messidor/JF_512',
+                             'LEVEL': OrderedDict([(0, 'no DR'),
+                                                   (1, 'mild non-proliferative DR')])}
+}
 
 
 def load_labels(labels_file):
@@ -408,9 +403,10 @@ def class_conditional_uncertainty(y, uncertainty, disease_onset,
 
 def main():
 
-    LABELS_FILE, IMAGE_PATH, LEVEL = config('Messidor')
-    y = load_labels(LABELS_FILE)
-    images = load_filenames(LABELS_FILE)
+    config = CONFIG['Messidor']
+
+    y = load_labels(config['LABELS_FILE'])
+    images = load_filenames(config['LABELS_FILE'])
     probs, probs_mc = load_predictions(
         'data/processed/100_mc_Messidor_BayesJFnet17_392bea6.pkl')
 
@@ -422,8 +418,8 @@ def main():
 
         fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin, dl, y,
              label='$\sigma_{pred}$', save=True, format='.png',
-             image_path=IMAGE_PATH,
-             level=LEVEL)
+             image_path=config['IMAGE_PATH'],
+             level=config['LEVEL'])
 
         print('Please resize and save this figure to your needs,'
               'then press "c"')
@@ -436,7 +432,7 @@ def main():
         roc_auc_rejection_figure(y_bin, pred_mean, uncertainties, dl,
                                  save=True, format='.png')
 
-        level_rejection_figure(y, pred_std, dl, LEVEL,
+        level_rejection_figure(y, pred_std, dl, config['LEVEL'],
                                save=True, format='.png')
 
 if __name__ == '__main__':
