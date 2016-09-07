@@ -25,26 +25,30 @@ A4_WIDTH_SQUARE = (8.27, 8.27)
 TAG = {0: 'healthy', 1: 'diseased'}
 
 
-CONFIG = {'KaggleDR':
-                     {'LABELS_FILE': 'data/kaggle_dr/retinopathy_solution.csv',
-                      'IMAGE_PATH': 'data/kaggle_dr/test_JF_512',
-                      'LEVEL': OrderedDict([(0, 'no DR'),
-                                            (1, 'mild DR'),
-                                            (2, 'moderate DR'),
-                                            (3, 'severe DR'),
-                                            (4, 'proliferative DR')])},
-          'Messidor':
-                     {'LABELS_FILE': 'data/messidor/messidor.csv',
-                      'IMAGE_PATH': 'data/messidor/JF_512',
-                      'LEVEL': OrderedDict([(0, 'no DR'),
-                                            (1, 'mild non-proliferative DR'),
-                                            (2, 'severe non-proliferative DR'),
-                                            (3, 'most serious')])},
-          'Messidor_R0vsR1':
-                            {'LABELS_FILE': 'data/messidor/messidor_R0vsR1.csv',
-                             'IMAGE_PATH': 'data/messidor/JF_512',
-                             'LEVEL': OrderedDict([(0, 'no DR'),
-                                                   (1, 'mild non-proliferative DR')])}
+CONFIG = {
+    'KaggleDR':
+        {'LABELS_FILE': 'data/kaggle_dr/retinopathy_solution.csv',
+         'IMAGE_PATH': 'data/kaggle_dr/test_JF_512',
+         'LEVEL': OrderedDict([(0, 'no DR'),
+                               (1, 'mild DR'),
+                               (2, 'moderate DR'),
+                               (3, 'severe DR'),
+                               (4, 'proliferative DR')]),
+         'min_percentile': 10},
+    'Messidor':
+        {'LABELS_FILE': 'data/messidor/messidor.csv',
+         'IMAGE_PATH': 'data/messidor/JF_512',
+         'LEVEL': OrderedDict([(0, 'no DR'),
+                               (1, 'mild non-proliferative DR'),
+                               (2, 'severe non-proliferative DR'),
+                               (3, 'most serious')]),
+         'min_percentile': 50},
+    'Messidor_R0vsR1':
+        {'LABELS_FILE': 'data/messidor/messidor_R0vsR1.csv',
+         'IMAGE_PATH': 'data/messidor/JF_512',
+         'LEVEL': OrderedDict([(0, 'no DR'),
+                               (1, 'mild non-proliferative DR')]),
+         'min_percentile': 50}
 }
 
 
@@ -151,8 +155,9 @@ def stratified_mask(y, y_prior, shuffle=False):
     return mask
 
 
-def performance_over_uncertainty_tol(uncertainty, y, probs, measure):
-    uncertainty_tol, frac_retain, accept_idx = sample_rejection(uncertainty)
+def performance_over_uncertainty_tol(uncertainty, y, probs, measure, config):
+    uncertainty_tol, frac_retain, accept_idx = \
+        sample_rejection(uncertainty, config['min_percentile'])
 
     p = np.zeros_like(uncertainty_tol)
     p_rand = np.zeros_like(uncertainty_tol)
@@ -169,7 +174,7 @@ def performance_over_uncertainty_tol(uncertainty, y, probs, measure):
     return uncertainty_tol, frac_retain, p, p_rand, p_strat
 
 
-def sample_rejection(uncertainty, min_percentile=50):
+def sample_rejection(uncertainty, min_percentile):
     uncertainty_tol = np.linspace(np.percentile(uncertainty, min_percentile),
                                   uncertainty.max(), 100)
     frac_retain = np.zeros_like(uncertainty_tol)
@@ -183,7 +188,7 @@ def sample_rejection(uncertainty, min_percentile=50):
     return uncertainty_tol, frac_retain, accept_indices
 
 
-def acc_rejection_figure(y, y_score, uncertainties, disease_onset,
+def acc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
                          save=False, format='.svg', fig=None):
     if fig is None:
         fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
@@ -197,7 +202,7 @@ def acc_rejection_figure(y, y_score, uncertainties, disease_onset,
     min_acc = 1.0
     for k, v in uncertainties.iteritems():
         v_tol, frac_retain, acc, acc_rand, acc_strat = \
-            performance_over_uncertainty_tol(v, y, y_score, accuracy)
+            performance_over_uncertainty_tol(v, y, y_score, accuracy, config)
         ax121.plot(v_tol, acc, label=k)
         ax122.plot(frac_retain, acc, label=k)
         if min_acc > min(np.concatenate((acc, acc_rand, acc_strat))):
@@ -218,13 +223,15 @@ def acc_rejection_figure(y, y_score, uncertainties, disease_onset,
         fig.savefig('acc_' + str(disease_onset) + format)
 
 
-def level_rejection_figure(y_level, uncertainty, disease_onset, LEVEL,
+def level_rejection_figure(y_level, uncertainty, disease_onset, config,
                            save=False, format='.svg', fig=None):
     if fig is None:
         fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
                                   A4_WIDTH_SQUARE[0] / 2.0))
 
-    tol, frac_retain, accept_idx = sample_rejection(uncertainty)
+    tol, frac_retain, accept_idx = sample_rejection(uncertainty,
+                                                    config['min_percentile'])
+    LEVEL = config['LEVEL']
     p = {level: np.array([rel_freq(y_level[accept], level)
                           for accept in accept_idx])
          for level in LEVEL}
@@ -245,18 +252,22 @@ def level_rejection_figure(y_level, uncertainty, disease_onset, LEVEL,
                                color=colors[level], label=LEVEL[level])
             cum += p[level]
 
+        ax121.set_xlim(min(tol), max(tol))
+        ax122.set_xlim(min(frac_retain), max(frac_retain))
+        ax121.set_ylim(0, 1)
+        ax122.set_ylim(0, 1)
+
         ax121.set_xlabel('tolerated model uncertainty')
         ax121.set_ylabel('relative proportions within retained dataset')
-        ax121.legend(loc='upper left')
-
+        ax121.legend(loc='lower center')
         ax122.set_xlabel('fraction of retained data')
-        ax122.legend(loc='upper left')
+        ax122.legend(loc='lower center')
 
     if save:
         fig.savefig('level_' + str(disease_onset) + format)
 
 
-def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset,
+def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
                              save=False, format='.svg', fig=None):
     if fig is None:
         fig = plt.figure(figsize=A4_WIDTH_SQUARE)
@@ -272,7 +283,8 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset,
     for k, v in uncertainties.iteritems():
         v_tol, frac_retain, auc, auc_rand, auc_strat = \
             performance_over_uncertainty_tol(v, y, y_score,
-                                             roc_auc_score)
+                                             roc_auc_score,
+                                             config)
 
         ax220.plot(v_tol, auc, label=k)
         ax221.plot(frac_retain, auc, label=k)
@@ -403,12 +415,12 @@ def class_conditional_uncertainty(y, uncertainty, disease_onset,
 
 def main():
 
-    config = CONFIG['Messidor']
+    config = CONFIG['KaggleDR']
 
     y = load_labels(config['LABELS_FILE'])
     images = load_filenames(config['LABELS_FILE'])
     probs, probs_mc = load_predictions(
-        'data/processed/100_mc_Messidor_BayesJFnet17_392bea6.pkl')
+        'data/processed/100_mc_KaggleDR_test_BayesJFnet17_392bea6.pkl')
 
     disease_onset_levels = [1]
     for dl in disease_onset_levels:
@@ -426,13 +438,13 @@ def main():
         import ipdb
         ipdb.set_trace()
 
-        acc_rejection_figure(y_bin, pred_mean, uncertainties, dl,
+        acc_rejection_figure(y_bin, pred_mean, uncertainties, dl, config,
                              save=True, format='.png')
 
-        roc_auc_rejection_figure(y_bin, pred_mean, uncertainties, dl,
+        roc_auc_rejection_figure(y_bin, pred_mean, uncertainties, dl, config,
                                  save=True, format='.png')
 
-        level_rejection_figure(y, pred_std, dl, config['LEVEL'],
+        level_rejection_figure(y, pred_std, dl, config,
                                save=True, format='.png')
 
 if __name__ == '__main__':
