@@ -2,6 +2,7 @@
    affects the performance of the rest of the data that remains automatically
    classified"""
 from __future__ import print_function
+from collections import OrderedDict
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
@@ -23,21 +24,28 @@ sns.set_context('paper', font_scale=1.4)
 A4_WIDTH_SQUARE = (8.27, 8.27)
 TAG = {0: 'healthy', 1: 'diseased'}
 
+
 def config(dataset):
     if dataset == 'KaggleDR':
         LABELS_FILE = 'data/kaggle_dr/retinopathy_solution.csv'
         IMAGE_PATH = 'data/kaggle_dr/test_JF_512'
-        LEVEL = {0: 'no DR', 1: 'mild DR', 2: 'moderate DR', 3: 'severe DR',
-                 4: 'proliferative DR'}
+        LEVEL = OrderedDict([(0, 'no DR'),
+                             (1, 'mild DR'),
+                             (2, 'moderate DR'),
+                             (3, 'severe DR'),
+                             (4, 'proliferative DR')])
     elif dataset == 'Messidor':
         LABELS_FILE = 'data/messidor/messidor.csv'
         IMAGE_PATH = 'data/messidor/JF_512'
-        LEVEL = {0: 'no DR', 1: 'mild non-proliferative DR',
-                 2: 'severe non-proliferative DR', 3: 'most serious'}
+        LEVEL = OrderedDict([(0, 'no DR'),
+                             (1, 'mild non-proliferative DR'),
+                             (2, 'severe non-proliferative DR'),
+                             (3, 'most serious')])
     elif dataset == 'Messidor_R0vsR1':
         LABELS_FILE = 'data/messidor/messidor_R0vsR1.csv'
         IMAGE_PATH = 'data/messidor/JF_512'
-        LEVEL = {0: 'no DR', 1: 'mild non-proliferative DR'}
+        LEVEL = OrderedDict([(0, 'no DR'),
+                             (1, 'mild non-proliferative DR')])
     else:
         print('Unknown dataset:', dataset)
         return
@@ -116,6 +124,10 @@ def accuracy(y_true, probs):
     return (y_true == y_pred).sum() / float(len(y_true))
 
 
+def rel_freq(y, k):
+    return (y == k).sum()/float(len(y))
+
+
 def stratified_mask(y, y_prior, shuffle=False):
     """Get mask such that y[mask] has the same size and class freq. as y_prior
 
@@ -145,24 +157,35 @@ def stratified_mask(y, y_prior, shuffle=False):
 
 
 def performance_over_uncertainty_tol(uncertainty, y, probs, measure):
-    uncertainty_tol = np.linspace(np.percentile(uncertainty, 50),
-                                  uncertainty.max(),
-                                  100)
+    uncertainty_tol, frac_retain, accept_idx = sample_rejection(uncertainty)
+
     p = np.zeros_like(uncertainty_tol)
     p_rand = np.zeros_like(uncertainty_tol)
     p_strat = np.zeros_like(uncertainty_tol)
-    frac_retain = np.zeros_like(uncertainty_tol)
-    n_samples = len(uncertainty)
+
     for i, ut in enumerate(uncertainty_tol):
-        accept = (uncertainty <= ut)
+        accept = accept_idx[i]
         rand_sel = np.random.permutation(accept)
         strat_sel = stratified_mask(y, y[accept], shuffle=True)
         p[i] = measure(y[accept], probs[accept])
         p_rand[i] = measure(y[rand_sel], probs[rand_sel])
         p_strat[i] = measure(y[strat_sel], probs[strat_sel])
-        frac_retain[i] = accept.sum() / float(n_samples)
 
     return uncertainty_tol, frac_retain, p, p_rand, p_strat
+
+
+def sample_rejection(uncertainty, min_percentile=50):
+    uncertainty_tol = np.linspace(np.percentile(uncertainty, min_percentile),
+                                  uncertainty.max(), 100)
+    frac_retain = np.zeros_like(uncertainty_tol)
+    n_samples = len(uncertainty)
+    accept_indices = []
+    for i, ut in enumerate(uncertainty_tol):
+        accept = (uncertainty <= ut)
+        accept_indices.append(accept)
+        frac_retain[i] = accept.sum() / float(n_samples)
+
+    return uncertainty_tol, frac_retain, accept_indices
 
 
 def acc_rejection_figure(y, y_score, uncertainties, disease_onset,
@@ -198,6 +221,44 @@ def acc_rejection_figure(y, y_score, uncertainties, disease_onset,
 
     if save:
         fig.savefig('acc_' + str(disease_onset) + format)
+
+
+def level_rejection_figure(y_level, uncertainty, disease_onset, LEVEL,
+                           save=False, format='.svg', fig=None):
+    if fig is None:
+        fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
+                                  A4_WIDTH_SQUARE[0] / 2.0))
+
+    tol, frac_retain, accept_idx = sample_rejection(uncertainty)
+    p = {level: np.array([rel_freq(y_level[accept], level)
+                          for accept in accept_idx])
+         for level in LEVEL}
+    cum = np.zeros_like(tol)
+
+    with sns.axes_style('white'):
+
+        ax121 = plt.subplot(1, 2, 1)
+        ax122 = plt.subplot(1, 2, 2)
+        ax121.set_title('(a)')
+        ax122.set_title('(b)')
+
+        colors = {level: sns.color_palette("Blues")[level] for level in LEVEL}
+        for level in LEVEL:
+            ax121.fill_between(tol, p[level] + cum, cum,
+                               color=colors[level], label=LEVEL[level])
+            ax122.fill_between(frac_retain, p[level] + cum, cum,
+                               color=colors[level], label=LEVEL[level])
+            cum += p[level]
+
+        ax121.set_xlabel('tolerated model uncertainty')
+        ax121.set_ylabel('relative proportions within retained dataset')
+        ax121.legend(loc='upper left')
+
+        ax122.set_xlabel('fraction of retained data')
+        ax122.legend(loc='upper left')
+
+    if save:
+        fig.savefig('level_' + str(disease_onset) + format)
 
 
 def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset,
@@ -360,7 +421,7 @@ def main():
         uncertainties = {'$\sigma_{pred}$': pred_std}
 
         fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin, dl, y,
-             label='$\sigma_{pred}$', save=False, format='.png',
+             label='$\sigma_{pred}$', save=True, format='.png',
              image_path=IMAGE_PATH,
              level=LEVEL)
 
@@ -374,6 +435,9 @@ def main():
 
         roc_auc_rejection_figure(y_bin, pred_mean, uncertainties, dl,
                                  save=True, format='.png')
+
+        level_rejection_figure(y, pred_std, dl, LEVEL,
+                               save=True, format='.png')
 
 if __name__ == '__main__':
     main()
