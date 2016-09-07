@@ -5,9 +5,11 @@ import click
 @click.command()
 @click.option('--method', '-me', type=click.Choice(['mc_samples',
                                                    'ensemble_prediction']),
-              help='* mc_samples: Draw T=100 MC dropout samples.\n'
+              help='* mc_samples: Draw T=n_pred MC dropout samples.\n'
                    '* ensemble_prediction: Always draw from the same '
-                   'networks=range(100).')
+                   'networks=range(n_pred).')
+@click.option('--n_pred', default=100, show_default=True,
+              help='The number of predictions to perform for each image.')
 @click.option('--dataset', '-d', default='KaggleDR_test', show_default=True,
               help="Choose out of: ['KaggleDR_test', 'KaggleDR_train',"
                    "'Messidor', 'Messidor_R0vsR1']")
@@ -19,9 +21,9 @@ import click
               help="String 'JFnet' or a pickle file from models.save_model")
 @click.option('--batch_size', '-b', default=512, show_default=True)
 @click.option('--out_file', '-f',
-              default='{method}_{dataset}_{model}.pkl',
+              default='{method}_{n_pred}_{dataset}_{model}.pkl',
               show_default=True)
-def main(method, dataset, preprocessing, normalization, model,
+def main(method, n_pred, dataset, preprocessing, normalization, model,
          batch_size, out_file):
     """Perform and save stochastic forward passes"""
 
@@ -75,7 +77,6 @@ def main(method, dataset, preprocessing, normalization, model,
         model = models.load_model(model)
 
     n_out = model.net.values()[-1].output_shape[1]
-    n_pred = 100
 
     if method == 'mc_samples':
         def compute_stoch_out(*inputs):
@@ -111,8 +112,9 @@ def main(method, dataset, preprocessing, normalization, model,
     results = {'det_out': det_out,
                'stoch_out': stoch_out}
 
-    if out_file == '{method}_{dataset}_{model}.pkl':
+    if out_file == '{method}_{n_pred}_{dataset}_{model}.pkl':
         out_file = out_file.format(method=method,
+                                   n_pred=n_pred,
                                    dataset=dataset,
                                    model=model_name)
     with open(out_file, 'wb') as h:
