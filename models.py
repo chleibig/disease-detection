@@ -27,6 +27,52 @@ from lasagne.layers import set_all_param_values
 from lasagne.nonlinearities import softmax, LeakyRectify
 
 
+class BatchFreezableDropoutLayer(DropoutLayer):
+    """Lasagne Dropout layer with the option to apply the same dropout
+       mask to all images in a batch.
+    """
+    def __init__(self, incoming, p=0.5, rescale=True, **kwargs):
+        super(BatchFreezableDropoutLayer, self).__init__(incoming,
+                                                         p=p,
+                                                         rescale=rescale,
+                                                         **kwargs)
+
+    def get_output_for(self, input, deterministic=False, batch_freeze=False,
+                       **kwargs):
+        """
+        Parameters
+        ----------
+        input : tensor
+            output from the previous layer
+        deterministic : bool
+            If true dropout and scaling is disabled, see notes
+        batch_freeze : bool
+            If true the same dropout mask is applied to all samples in a batch
+        """
+        if deterministic or self.p == 0:
+            return input
+        else:
+            # Using theano constant to prevent upcasting
+            one = T.constant(1)
+
+            retain_prob = one - self.p
+            if self.rescale:
+                input /= retain_prob
+
+            # use nonsymbolic shape for dropout mask if possible
+            input_shape = self.input_shape
+
+            if batch_freeze:
+                return input * self._srng.binomial(input_shape[1:],
+                                                   p=retain_prob,
+                                                   dtype=input.dtype)
+            else:
+                if any(s is None for s in input_shape):
+                    input_shape = input.shape
+                return input * self._srng.binomial(input_shape, p=retain_prob,
+                                                   dtype=input.dtype)
+
+
 class Model(object):
     """Encapsulate Lasagne model
 
@@ -46,6 +92,7 @@ class Model(object):
 
         self._predict = None
         self._predict_stoch = None
+        self._predict_subnet = None
         self._srngs = None  # Dropout layer random streams for ensemble pred.
         self._model_seed = None
 
@@ -85,31 +132,35 @@ class Model(object):
         if kwargs:
             raise TypeError('Unexpected **kwargs: %r' % kwargs)
 
-        assert len(inputs[0]) == 1, 'Please supply just one sample!'
-
         # Check that all random streams are set up correctly
         if self._srngs is None or (self._model_seed != seed):
             self._setup_random_streams(seed)
 
-        if self._predict_stoch is None:
-            self._predict_stoch = theano.function(
-                inputs=self.inputs.values(),
-                outputs=lasagne.layers.get_output(self.net.values()[-1],
-                                                  deterministic=False))
-        # 3. loop over subnetwork predictions and adjust all random states
-        #    in between
-        n_out = self.get_output_layer().output_shape[1]
-        predictions = np.zeros((1, n_out, len(networks)))
-        for i, t in enumerate(networks):
-            [rng.seed(rng.layer_seed + t) for rng in self._srngs]
-            predictions[:, :, i] = self._predict_stoch(*inputs)
+        l_out = self.get_output_layer()
 
+        if self._predict_subnet is None:
+            pred = lasagne.layers.get_output(l_out,
+                                             deterministic=False,
+                                             batch_freeze=True)
+            self._predict_subnet = theano.function(self.inputs.values(), pred)
+        n_out = l_out.output_shape[1]
+        n_samples = len(inputs[0])
+        predictions = np.zeros((n_samples, n_out, len(networks)))
+        for i, t in enumerate(networks):
+            # choose subnet via seed
+            [rng.seed(rng.layer_seed + t) for rng in self._srngs]
+            # batch prediction on subnet
+            predictions[:, :, i] = self._predict_subnet(*inputs)
         return predictions
 
     def _setup_random_streams(self, seed):
         # 1. collect all dropout layer random streams
         srngs = [layer._srng for layer in self.net.values()
-                 if isinstance(layer, DropoutLayer)]
+                 if isinstance(layer, BatchFreezableDropoutLayer)]
+        if not srngs:
+            raise TypeError('No BatchFreezableDropoutLayer instances in'
+                            'network found. Ensemble prediction might not'
+                            'work as expected.')
         # 2. seed each dropout layer differently but in a reproducable way
         rs = np.random.RandomState(seed)
         for rng in srngs:
@@ -180,86 +231,86 @@ class JFnet(Model):
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['1d'] = DropoutLayer(net['1'], p=p_conv)
+        net['1d'] = BatchFreezableDropoutLayer(net['1'], p=p_conv)
         net['2'] = MaxPool2DLayer(net['1d'], 3, stride=(2, 2))
         net['3'] = ConvLayer(net['2'], 32, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['3d'] = DropoutLayer(net['3'], p=p_conv)
+        net['3d'] = BatchFreezableDropoutLayer(net['3'], p=p_conv)
         net['4'] = ConvLayer(net['3d'], 32, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['4d'] = DropoutLayer(net['4'], p=p_conv)
+        net['4d'] = BatchFreezableDropoutLayer(net['4'], p=p_conv)
         net['5'] = MaxPool2DLayer(net['4d'], 3, stride=(2, 2))
         net['6'] = ConvLayer(net['5'], 64, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['6d'] = DropoutLayer(net['6'], p=p_conv)
+        net['6d'] = BatchFreezableDropoutLayer(net['6'], p=p_conv)
         net['7'] = ConvLayer(net['6d'], 64, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['7d'] = DropoutLayer(net['7'], p=p_conv)
+        net['7d'] = BatchFreezableDropoutLayer(net['7'], p=p_conv)
         net['8'] = MaxPool2DLayer(net['7d'], 3, stride=(2, 2))
         net['9'] = ConvLayer(net['8'], 128, 3, stride=(1, 1), pad='same',
                              untie_biases=True,
                              nonlinearity=LeakyRectify(leakiness=0.5),
                              W=lasagne.init.Orthogonal(1.0),
                              b=lasagne.init.Constant(0.1))
-        net['9d'] = DropoutLayer(net['9'], p=p_conv)
+        net['9d'] = BatchFreezableDropoutLayer(net['9'], p=p_conv)
         net['10'] = ConvLayer(net['9d'], 128, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['10d'] = DropoutLayer(net['10'], p=p_conv)
+        net['10d'] = BatchFreezableDropoutLayer(net['10'], p=p_conv)
         net['11'] = ConvLayer(net['10d'], 128, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['11d'] = DropoutLayer(net['11'], p=p_conv)
+        net['11d'] = BatchFreezableDropoutLayer(net['11'], p=p_conv)
         net['12'] = ConvLayer(net['11d'], 128, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['12d'] = DropoutLayer(net['12'], p=p_conv)
+        net['12d'] = BatchFreezableDropoutLayer(net['12'], p=p_conv)
         net['13'] = MaxPool2DLayer(net['12d'], 3, stride=(2, 2))
         net['14'] = ConvLayer(net['13'], 256, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['14d'] = DropoutLayer(net['14'], p=p_conv)
+        net['14d'] = BatchFreezableDropoutLayer(net['14'], p=p_conv)
         net['15'] = ConvLayer(net['14d'], 256, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['15d'] = DropoutLayer(net['15'], p=p_conv)
+        net['15d'] = BatchFreezableDropoutLayer(net['15'], p=p_conv)
         net['16'] = ConvLayer(net['15'], 256, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['16d'] = DropoutLayer(net['16'], p=p_conv)
+        net['16d'] = BatchFreezableDropoutLayer(net['16'], p=p_conv)
         net['17'] = ConvLayer(net['16d'], 256, 3, stride=(1, 1), pad='same',
                               untie_biases=True,
                               nonlinearity=LeakyRectify(leakiness=0.5),
                               W=lasagne.init.Orthogonal(1.0),
                               b=lasagne.init.Constant(0.1))
-        net['17d'] = DropoutLayer(net['17'], p=p_conv)
+        net['17d'] = BatchFreezableDropoutLayer(net['17'], p=p_conv)
         net['18'] = MaxPool2DLayer(net['17d'], 3, stride=(2, 2),
                                    name='coarse_last_pool')
-        net['19'] = DropoutLayer(net['18'], p=0.5)
+        net['19'] = BatchFreezableDropoutLayer(net['18'], p=0.5)
         net['20'] = DenseLayer(net['19'], num_units=1024, nonlinearity=None,
                                W=lasagne.init.Orthogonal(1.0),
                                b=lasagne.init.Constant(0.1),
@@ -270,13 +321,13 @@ class JFnet(Model):
         # Combine representations of both eyes
         net['24'] = ReshapeLayer(net['23'],
                                  (-1, net['23'].output_shape[1] * 2))
-        net['25'] = DropoutLayer(net['24'], p=0.5)
+        net['25'] = BatchFreezableDropoutLayer(net['24'], p=0.5)
         net['26'] = DenseLayer(net['25'], num_units=1024, nonlinearity=None,
                                W=lasagne.init.Orthogonal(1.0),
                                b=lasagne.init.Constant(0.1),
                                name='combine_repr_fc')
         net['27'] = FeaturePoolLayer(net['26'], 2)
-        net['28'] = DropoutLayer(net['27'], p=0.5)
+        net['28'] = BatchFreezableDropoutLayer(net['27'], p=0.5)
         net['29'] = DenseLayer(net['28'],
                                num_units=n_classes * 2,
                                nonlinearity=None,

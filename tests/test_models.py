@@ -71,17 +71,109 @@ class TestJFnet:
         assert numpy.allclose(probas, probas_pred)
 
 
+class TestBatchFreezableDropoutLayer:
+    @pytest.fixture(params=[(100, 100), (None, 100)])
+    def input_layer(self, request):
+        from lasagne.layers.input import InputLayer
+        return InputLayer(request.param)
+
+    @pytest.fixture
+    def layer(self, input_layer):
+        from models import BatchFreezableDropoutLayer
+        return BatchFreezableDropoutLayer(input_layer)
+
+    @pytest.fixture
+    def layer_no_rescale(self, input_layer):
+        from models import BatchFreezableDropoutLayer
+        return BatchFreezableDropoutLayer(input_layer, rescale=False)
+
+    @pytest.fixture
+    def layer_p_02(self, input_layer):
+        from models import BatchFreezableDropoutLayer
+        return BatchFreezableDropoutLayer(input_layer, p=0.2)
+
+    def test_batch_freeze_true(self, layer):
+        input = theano.shared(numpy.ones((100, 100)))
+        result = layer.get_output_for(input, batch_freeze=True)
+        result_eval = result.eval()
+        assert numpy.array_equal(result_eval[0, :], result_eval[1, :])
+        assert numpy.linalg.matrix_rank(result_eval) == 1
+
+    def test_batch_freeze_false(self, layer):
+        input = theano.shared(numpy.ones((100, 100)))
+        result = layer.get_output_for(input, batch_freeze=False)
+        result_eval = result.eval()
+        assert not numpy.array_equal(result_eval[0, :], result_eval[1, :])
+        assert numpy.linalg.matrix_rank(result_eval) == 100
+
+    # Tests from here on check that by default a BatchFreezableDropoutLayer
+    # behaves the same way as a DropoutLayer (source: https://github.com/
+    # Lasagne/Lasagne/blob/8d57668f606bc86625bd06de75807f21643130d2/lasagne/
+    # tests/layers/test_noise.py)
+
+    def test_get_output_for_non_deterministic(self, layer):
+        input = theano.shared(numpy.ones((100, 100)))
+        result = layer.get_output_for(input)
+        result_eval = result.eval()
+        assert 0.9 < result_eval.mean() < 1.1
+        assert (numpy.unique(result_eval) == [0., 2.]).all()
+
+    def test_get_output_for_deterministic(self, layer):
+        input = theano.shared(numpy.ones((100, 100)))
+        result = layer.get_output_for(input, deterministic=True)
+        result_eval = result.eval()
+        assert (result_eval == input.get_value()).all()
+
+    def test_get_output_for_no_rescale(self, layer_no_rescale):
+        input = theano.shared(numpy.ones((100, 100)))
+        result = layer_no_rescale.get_output_for(input)
+        result_eval = result.eval()
+        assert 0.4 < result_eval.mean() < 0.6
+        assert (numpy.unique(result_eval) == [0., 1.]).all()
+
+    def test_get_output_for_no_rescale_dtype(self, layer_no_rescale):
+        input = theano.shared(numpy.ones((100, 100), dtype=numpy.int32))
+        result = layer_no_rescale.get_output_for(input)
+        assert result.dtype == input.dtype
+
+    def test_get_output_for_p_02(self, layer_p_02):
+        input = theano.shared(numpy.ones((100, 100)))
+        result = layer_p_02.get_output_for(input)
+        result_eval = result.eval()
+        assert 0.9 < result_eval.mean() < 1.1
+        assert (numpy.round(numpy.unique(result_eval), 2) == [0., 1.25]).all()
+
+    def test_specified_rng(self, input_layer):
+        from models import BatchFreezableDropoutLayer
+        from lasagne.random import get_rng, set_rng
+        from numpy.random import RandomState
+        input = theano.shared(numpy.ones((100, 100)))
+        seed = 123456789
+        rng = get_rng()
+
+        set_rng(RandomState(seed))
+        result = BatchFreezableDropoutLayer(input_layer).get_output_for(input)
+        result_eval1 = result.eval()
+
+        set_rng(RandomState(seed))
+        result = BatchFreezableDropoutLayer(input_layer).get_output_for(input)
+        result_eval2 = result.eval()
+
+        set_rng(rng)  # reset to original RNG for other tests
+        assert numpy.allclose(result_eval1, result_eval2)
+
+
 class TestModel:
 
     @pytest.fixture
     def net(self):
         from collections import OrderedDict
         from lasagne.layers.input import InputLayer
-        from lasagne.layers.noise import DropoutLayer
+        from models import BatchFreezableDropoutLayer
         net = OrderedDict()
         net[0] = InputLayer((None, 100))
-        net[1] = DropoutLayer(net[0])
-        net[2] = DropoutLayer(net[1])
+        net[1] = BatchFreezableDropoutLayer(net[0])
+        net[2] = BatchFreezableDropoutLayer(net[1])
         return net
 
     @pytest.fixture
@@ -93,12 +185,16 @@ class TestModel:
 
     def test_ensemble_prediction(self, model):
         x = numpy.ones((1, 100)).astype('float32')
+        X = numpy.concatenate((x, x, x, x))
 
-        pred07 = model.ensemble_prediction(x, networks=[0, 7])
+        pred071 = model.ensemble_prediction(x, networks=[0, 7, 1])
         pred7 = model.ensemble_prediction(x, networks=[7])
         pred7_seed_change = model.ensemble_prediction(x, networks=[7], seed=42)
+        batch_pred = model.ensemble_prediction(X, networks=[0, 7, 1])
 
-        assert pred07.shape == (1, 100, 2)
+        assert pred071.shape == (1, 100, 3)
         assert pred7.shape == (1, 100, 1)
-        assert numpy.allclose(pred07[0, :, 1], pred7[0, :, 0])
+        assert batch_pred.shape == (4, 100, 3)
+        assert numpy.allclose(pred071[0, :, 1], pred7[0, :, 0])
         assert not numpy.allclose(pred7, pred7_seed_change)
+        assert numpy.allclose(pred071[0, :, :], batch_pred[2, :, :])

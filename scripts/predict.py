@@ -82,17 +82,9 @@ def main(method, dataset, preprocessing, normalization, model,
             return model.mc_samples(*inputs, T=n_pred)
     elif method == 'ensemble_prediction':
         def compute_stoch_out(*inputs):
-            batch_size = len(inputs[0])
-            batch_predictions = np.zeros((batch_size, n_out, n_pred),
-                                         dtype=np.float32)
-            for i in range(batch_size):
-                batch_i = [input[i][None, :] for input in inputs]
-                batch_predictions[i] = model.ensemble_prediction(*batch_i,
-                                                        networks=range(n_pred))
-            return batch_predictions
+            return model.ensemble_prediction(*inputs, networks=range(n_pred))
     else:
         print('Unknown method, aborting.')
-
 
     det_out = np.zeros((ds.n_samples, n_out), dtype=np.float32)
     stoch_out = np.zeros((ds.n_samples, n_out, n_pred), dtype=np.float32)
