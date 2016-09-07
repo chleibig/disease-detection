@@ -111,9 +111,10 @@ class Model(object):
         srngs = [layer._srng for layer in self.net.values()
                  if isinstance(layer, DropoutLayer)]
         # 2. seed each dropout layer differently but in a reproducable way
+        rs = np.random.RandomState(seed)
         for rng in srngs:
             # same strategy as used by lasagne's DropoutLayer
-            layer_seed = np.random.RandomState(seed).randint(1, 2147462579)
+            layer_seed = rs.randint(1, 2147462579)
             rng.seed(layer_seed)
             rng.layer_seed = layer_seed
         self._srngs = srngs
