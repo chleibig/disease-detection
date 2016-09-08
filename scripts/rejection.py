@@ -232,7 +232,7 @@ def level_rejection_figure(y_level, uncertainty, disease_onset, config,
     tol, frac_retain, accept_idx = sample_rejection(uncertainty,
                                                     config['min_percentile'])
     LEVEL = config['LEVEL']
-    p = {level: np.array([rel_freq(y_level[accept], level)
+    p = {level: np.array([rel_freq(y_level[~accept], level)
                           for accept in accept_idx])
          for level in LEVEL}
     cum = np.zeros_like(tol)
@@ -250,6 +250,11 @@ def level_rejection_figure(y_level, uncertainty, disease_onset, config,
                                color=colors[level], label=LEVEL[level])
             ax122.fill_between(frac_retain, p[level] + cum, cum,
                                color=colors[level], label=LEVEL[level])
+            if (level + 1) == disease_onset:
+                ax121.plot(tol, p[level] + cum,
+                           color='k', label='decision boundary')
+                ax122.plot(frac_retain, p[level] + cum,
+                           color='k', label='decision boundary')
             cum += p[level]
 
         ax121.set_xlim(min(tol), max(tol))
@@ -258,7 +263,7 @@ def level_rejection_figure(y_level, uncertainty, disease_onset, config,
         ax122.set_ylim(0, 1)
 
         ax121.set_xlabel('tolerated model uncertainty')
-        ax121.set_ylabel('relative proportions within retained dataset')
+        ax121.set_ylabel('relative proportions within rejected dataset')
         ax121.legend(loc='lower center')
         ax122.set_xlabel('fraction of retained data')
         ax122.legend(loc='lower center')
@@ -445,7 +450,7 @@ def main():
                                  save=True, format='.png')
 
         level_rejection_figure(y, pred_std, dl, config,
-                               save=True, format='.png')
+                               save=True, format='.svg')
 
 if __name__ == '__main__':
     main()
