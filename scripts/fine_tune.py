@@ -32,6 +32,7 @@ from util import Progplot
 
 p = 0.2
 last_layer = '17'  # from JFnet
+n_classes = 5
 batch_size = 32
 n_epoch = 30
 lr_schedule = {0: 0.005, 1: 0.005, 2: 0.001, 3: 0.001, 4: 0.0005, 5: 0.0001}
@@ -41,6 +42,8 @@ l1_lambda = 0.001  # only last layer
 size = 512
 dataset = 'KaggleDR'
 seed = 1234
+
+model_dump = 'Bayesian17_5.pkl'
 
 previous_weights = None
 
@@ -65,12 +68,12 @@ datagen_aug = DatasetImageDataGenerator(**AUGMENTATION_PARAMS)
 
 if dataset == 'KaggleDR':
     ds = KaggleDR(path_data='data/kaggle_dr/train_JF_BG_' + str(size),
-                  filename_targets='data/kaggle_dr/trainLabels_01vs234.csv',
+                  filename_targets='data/kaggle_dr/trainLabels.csv',
                   preprocessing=KaggleDR.standard_normalize,
                   require_both_eyes_same_label=False)
     ds_test = KaggleDR(path_data='data/kaggle_dr/test_JF_BG_' + str(size),
                        filename_targets='data/kaggle_dr/'
-                                        'retinopathy_solution_01vs234.csv',
+                                        'retinopathy_solution.csv',
                        preprocessing=KaggleDR.standard_normalize,
                        require_both_eyes_same_label=False)
     idx_train, idx_val = train_test_split(np.arange(ds.n_samples),
@@ -89,7 +92,8 @@ best_auc = None
 ###########################################################################
 # Setup network
 
-model = JFnetMono(p_conv=p, last_layer=last_layer, weights=None, n_classes=2)
+model = JFnetMono(p_conv=p, last_layer=last_layer, weights=None,
+                  n_classes=n_classes)
 
 l_out = model.get_output_layer()
 X = model.inputs['X']
@@ -165,7 +169,7 @@ for epoch in range(n_epoch):
     samples_per_epoch = len(idx_train)
     progbar = Progbar(samples_per_epoch)
     loss_train = np.zeros((samples_per_epoch,))
-    predictions_train = np.zeros((samples_per_epoch, 2))
+    predictions_train = np.zeros((samples_per_epoch, n_classes))
     labels_train = np.zeros((samples_per_epoch,))  # track due to shuffling
 
     samples_seen = 0
@@ -222,7 +226,7 @@ for epoch in range(n_epoch):
     print("Validating...")
     progbar = Progbar(len(idx_val))
     loss_val = np.zeros(len(idx_val))
-    predictions_val = np.zeros((len(idx_val), 2))
+    predictions_val = np.zeros((len(idx_val), n_classes))
     y_val = ds.y[idx_val]
     pos = 0
     for Xb, yb in ds.iterate_minibatches(idx_val, batch_size,
@@ -269,7 +273,7 @@ if dataset == 'KaggleDR':
     idx_test = np.arange(ds_test.n_samples)
 
 loss_test = np.zeros(len(idx_test))
-predictions_test = np.zeros((len(idx_test), 2))
+predictions_test = np.zeros((len(idx_test), n_classes))
 progbar = Progbar(len(idx_test))
 pos = 0
 for Xb, yb in ds.iterate_minibatches(idx_test,
@@ -289,3 +293,4 @@ res = {'history': progplot.y,
        'pred_test': predictions_test,
        'param values': lasagne.layers.get_all_param_values(l_out)}
 pickle.dump(res, open('results' + last_layer + '.pkl', 'wb'))
+models.save_model(model, model_dump)
