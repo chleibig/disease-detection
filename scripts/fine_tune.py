@@ -10,7 +10,6 @@ import lasagne
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.regularization import regularize_layer_params, l1
 from sklearn.cross_validation import train_test_split
-from sklearn.metrics import roc_auc_score
 
 from keras.utils.generic_utils import Progbar
 
@@ -24,6 +23,7 @@ from datasets import KaggleDR
 from datasets import DatasetImageDataGenerator
 from training import generator_queue
 from util import Progplot
+from util import quadratic_weighted_kappa
 
 
 # TODO:
@@ -87,7 +87,7 @@ print('-' * 40)
 print('JFnet layers: ', last_layer)
 print('-' * 40)
 
-best_auc = None
+best_kappa = None
 
 ###########################################################################
 # Setup network
@@ -143,7 +143,7 @@ pred_iter = theano.function([X], predictions_det)
 start_time = time.time()
 progplot = Progplot(n_epoch, "epochs (batch_size " + str(batch_size) + ")",
                     names=['loss (train)', 'loss (val.)',
-                           'AUC (train)', 'AUC (val.)'],
+                           'kappa (train)', 'kappa (val.)'],
                     title='Finetuning Bayesian JFnet' + last_layer)
 
 y_train = ds.y[idx_train]
@@ -217,8 +217,9 @@ for epoch in range(n_epoch):
                 gc.collect()
 
     print('Training loss: ', loss_train.mean())
-    auc_train = roc_auc_score(labels_train, predictions_train[:, 1])
-    print('Training AUC: ', auc_train)
+    kappa_train = quadratic_weighted_kappa(labels_train, predictions_train,
+                                           n_classes)
+    print('Training kappa: ', kappa_train)
 
     print('-' * 40)
     print('Epoch', epoch)
@@ -238,20 +239,21 @@ for epoch in range(n_epoch):
         progbar.add(Xb.shape[0], values=[("val. loss", loss)])
         pos += Xb.shape[0]
 
-    auc_val = roc_auc_score(y_val, predictions_val[:, 1])
+    kappa_val = quadratic_weighted_kappa(y_val, predictions_val,
+                                         n_classes)
 
     print('Validation loss: ', loss_val.mean())
-    print('Validation AUC: ', auc_val)
+    print('Validation kappa: ', kappa_val)
 
     progplot.add(values=[("loss (train)", loss_train.mean()),
-                         ("AUC (train)", auc_train),
+                         ("kappa (train)", kappa_train),
                          ("loss (val.)", loss_val.mean()),
-                         ("AUC (val.)", auc_val)])
-    if best_auc is None:
-        best_auc = auc_val
+                         ("kappa (val.)", kappa_val)])
+    if best_kappa is None:
+        best_kappa = kappa_val
 
-    if auc_val > best_auc:
-        best_auc = auc_val
+    if kappa_val > best_kappa:
+        best_kappa = kappa_val
         print('Saving current best weights...')
         models.save_weights(l_out, 'best_weights' + last_layer + '.npz')
 
@@ -286,7 +288,9 @@ for Xb, yb in ds.iterate_minibatches(idx_test,
     pos += Xb.shape[0]
 
 print('Test loss: ', loss_test.mean())
-print('Test AUC: ', roc_auc_score(ds.y[idx_test], predictions_test[:, 1]))
+print('Test kappa: ', quadratic_weighted_kappa(ds.y[idx_test],
+                                               predictions_test,
+                                               n_classes))
 
 res = {'history': progplot.y,
        'y_test': ds.y[idx_test],
