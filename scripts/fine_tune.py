@@ -217,7 +217,9 @@ for epoch in range(n_epoch):
                 gc.collect()
 
     print('Training loss: ', loss_train.mean())
-    kappa_train = quadratic_weighted_kappa(labels_train, predictions_train,
+    kappa_train = quadratic_weighted_kappa(labels_train,
+                                           np.argmax(predictions_train,
+                                                     axis=1),
                                            n_classes)
     print('Training kappa: ', kappa_train)
 
@@ -239,7 +241,8 @@ for epoch in range(n_epoch):
         progbar.add(Xb.shape[0], values=[("val. loss", loss)])
         pos += Xb.shape[0]
 
-    kappa_val = quadratic_weighted_kappa(y_val, predictions_val,
+    kappa_val = quadratic_weighted_kappa(y_val,
+                                         np.argmax(predictions_val, axis=1),
                                          n_classes)
 
     print('Validation loss: ', loss_val.mean())
@@ -289,7 +292,8 @@ for Xb, yb in ds.iterate_minibatches(idx_test,
 
 print('Test loss: ', loss_test.mean())
 print('Test kappa: ', quadratic_weighted_kappa(ds.y[idx_test],
-                                               predictions_test,
+                                               np.argmax(predictions_test,
+                                                         axis=1),
                                                n_classes))
 
 res = {'history': progplot.y,
