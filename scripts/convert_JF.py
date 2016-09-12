@@ -22,15 +22,19 @@ from PIL import Image
 import cv2
 
 
-white_list_extensions = ['jpg', 'jpeg', 'tif']
+white_list_extensions = ['jpg', 'jpeg', 'JPEG', 'tif']
 
 
-def convert(fname, crop_size, enhance_contrast=False):
+def convert(fname, crop_size, enhance_contrast=False, ignore_grayscale=False):
     """Refactored from JF's generators.load_image_and_process"""
     im = Image.open(fname, mode='r')
 
-    assert len(np.shape(im)) == 3, "Shape of image {} unexpected, " \
-        "maybe it's grayscale".format(fname)
+    if not ignore_grayscale:
+        assert len(np.shape(im)) == 3, "Shape of image {} unexpected, " \
+            "maybe it's grayscale".format(fname)
+    elif len(np.shape(im)) == 2:
+        print(fname, 'seems to be grayscale, ignored.')
+        return None
 
     w, h = im.size
 
@@ -117,12 +121,13 @@ def create_dirs(paths):
 def process(args):
     fun, arg = args
     directory, convert_directory, fname, crop_size, \
-        extension, enhance_contrast = arg
+        extension, enhance_contrast, ignore_grayscale = arg
     convert_fname = get_convert_fname(fname, extension, directory,
                                       convert_directory)
     if not os.path.exists(convert_fname):
-        img = fun(fname, crop_size, enhance_contrast)
-        save(img, convert_fname)
+        img = fun(fname, crop_size, enhance_contrast, ignore_grayscale)
+        if img is not None:
+            save(img, convert_fname)
 
 
 def save(img, fname):
@@ -143,8 +148,10 @@ def save(img, fname):
               help="Number of processes for parallelization.")
 @click.option('--enhance_contrast', default=False, show_default=True,
               help="Whether to use Benjamin Graham's contrast enhancement.")
+@click.option('--ignore_grayscale', default=False, show_default=True,
+              help="Whether to ignore grayscale images.")
 def main(directory, convert_directory, crop_size,
-         extension, n_proc, enhance_contrast):
+         extension, n_proc, enhance_contrast, ignore_grayscale):
     """Image preprocessing according to Jeffrey de Fauw:
        Crop and resize images, save with desired extension.
     """
@@ -171,7 +178,7 @@ def main(directory, convert_directory, crop_size,
 
     for f in filenames:
         args.append((convert, (directory, convert_directory, f, crop_size,
-                               extension, enhance_contrast)))
+                               extension, enhance_contrast, ignore_grayscale)))
 
     for i in range(batches):
         print("batch {:>2} / {}".format(i + 1, batches))
@@ -180,6 +187,7 @@ def main(directory, convert_directory, crop_size,
     pool.close()
 
     print('done')
+
 
 if __name__ == '__main__':
     main()
