@@ -505,9 +505,9 @@ def main():
     y = load_labels(config['LABELS_FILE'])
     images = load_filenames(config['LABELS_FILE'])
     probs, probs_mc = load_predictions('data/processed/'
-        '100_mc_KaggleDR_test_BayesJFnet17_392bea6.pkl')
+        '100_mc_KaggleDR_test_BayesianJFnet17_onset2_b69aadd.pkl')
 
-    disease_onset_levels = [1]
+    disease_onset_levels = [2]
     for dl in disease_onset_levels:
         y_bin, probs_bin, probs_mc_bin = detection_task(y, probs, probs_mc, dl)
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
