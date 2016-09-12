@@ -155,6 +155,35 @@ def stratified_mask(y, y_prior, shuffle=False):
     return mask
 
 
+def contralateral_agreement(y, config):
+    """Get boolean array of contralateral label agreement
+
+    Notes
+    =====
+
+    A very similar function is already there in datasets.py but here we want
+    to work on indices and more importantly check for contralateral label
+    agreement for a potentially binary label vector y for the corresponding
+    disease detection problem.
+
+    """
+
+    if 'kaggle_dr' not in config['LABELS_FILE']:
+        raise TypeError('Laterality not defined for %s'
+                        % config['LABELS_FILE'])
+
+    df = pd.read_csv(config['LABELS_FILE'])
+    left = df.image.str.contains(r'\d+_left').values
+    right = df.image.str.contains(r'\d+_right').values
+
+    accepted_patients = (y[left] == y[right])
+    accepted_images_left = df[left].image[accepted_patients]
+    accepted_images_right = df[right].image[accepted_patients]
+    accepted_images = pd.concat((accepted_images_left,
+                                 accepted_images_right))
+    return df.image.isin(accepted_images).values
+
+
 def performance_over_uncertainty_tol(uncertainty, y, probs, measure, config):
     uncertainty_tol, frac_retain, accept_idx = \
         sample_rejection(uncertainty, config['min_percentile'])
@@ -270,6 +299,57 @@ def level_rejection_figure(y_level, uncertainty, disease_onset, config,
 
     if save:
         fig.savefig('level_' + str(disease_onset) + format)
+
+
+def label_disagreement_figure(y, uncertainty, disease_onset, config,
+                              save=False, format='.svg', fig=None):
+    try:
+        disagreeing = ~contralateral_agreement(y, config)
+    except TypeError:
+        print('No data for label disagreement figure available.')
+        return
+
+    if fig is None:
+        fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
+                                  A4_WIDTH_SQUARE[0] / 2.0))
+
+    tol, frac_retain, accept_idx = sample_rejection(uncertainty,
+                                                    config['min_percentile'])
+
+    p_rejected = np.array([sum((~accept) & (disagreeing))/float(sum(~accept))
+                           for accept in accept_idx])
+    p_retained = np.array([sum((accept) & (disagreeing))/float(sum(accept))
+                           for accept in accept_idx])
+
+    with sns.axes_style('white'):
+
+        ax121 = plt.subplot(1, 2, 1)
+        ax122 = plt.subplot(1, 2, 2)
+        ax121.set_title('(a)')
+        ax122.set_title('(b)')
+
+        ax121.fill_between(tol, p_rejected, 0, alpha=0.5,
+                           color=sns.color_palette()[0], label='rejected')
+        ax121.fill_between(tol, p_retained, 0, alpha=0.5,
+                           color=sns.color_palette()[1], label='retained')
+        ax122.fill_between(frac_retain, p_rejected, 0, alpha=0.5,
+                           color=sns.color_palette()[0], label='rejected')
+        ax122.fill_between(frac_retain, p_retained, 0, alpha=0.5,
+                           color=sns.color_palette()[1], label='retained')
+
+        ax121.set_xlim(min(tol), max(tol))
+        ax122.set_xlim(min(frac_retain), max(frac_retain))
+        ax121.set_ylim(0, 1)
+        ax122.set_ylim(0, 1)
+
+        ax121.set_xlabel('tolerated model uncertainty')
+        ax122.set_xlabel('fraction of retained data')
+        ax121.set_ylabel('fraction of data with patient level label noise')
+        ax121.legend()
+        ax122.legend()
+
+    if save:
+        fig.savefig('label_disagreement_' + str(disease_onset) + format)
 
 
 def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
@@ -451,6 +531,10 @@ def main():
 
         level_rejection_figure(y, pred_std, dl, config,
                                save=True, format='.svg')
+
+        label_disagreement_figure(y_bin, pred_std, dl, config,
+                                  save=True, format='.svg')
+
 
 if __name__ == '__main__':
     main()
