@@ -146,9 +146,11 @@ def save(img, fname):
               help="Filetype of converted images.")
 @click.option('--n_proc', default=2, show_default=True,
               help="Number of processes for parallelization.")
-@click.option('--enhance_contrast', default=False, show_default=True,
+@click.option('--enhance_contrast', is_flag=True,
+              default=False, show_default=True,
               help="Whether to use Benjamin Graham's contrast enhancement.")
-@click.option('--ignore_grayscale', default=False, show_default=True,
+@click.option('--ignore_grayscale', is_flag=True,
+              default=False, show_default=True,
               help="Whether to ignore grayscale images.")
 def main(directory, convert_directory, crop_size,
          extension, n_proc, enhance_contrast, ignore_grayscale):
