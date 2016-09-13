@@ -7,7 +7,8 @@ import click
               help="Number of MC dropout samples, usually called T.")
 @click.option('--dataset', '-d', default='KaggleDR_test', show_default=True,
               help="Choose out of: ['KaggleDR_test', 'KaggleDR_train',"
-                   "'Messidor', 'Messidor_R0vsR1']")
+                   "'Messidor', 'Messidor_R0vsR1'] or provide a path to"
+                   "images")
 @click.option('--preprocessing', '-p', default='JF', show_default=True,
               help="Choose out of: ['JF', 'JF_BG']")
 @click.option('--normalization', '-n', default='jf_trafo', show_default=True,
@@ -31,7 +32,7 @@ def main(mc_samples, dataset, preprocessing, normalization, model,
     from keras.utils.generic_utils import Progbar
 
     import models
-    from datasets import KaggleDR, Messidor
+    from datasets import KaggleDR, Messidor, DatasetFromDirectory
 
     if dataset == 'KaggleDR_test':
         images = 'test_' + preprocessing + '_512'
@@ -57,8 +58,10 @@ def main(mc_samples, dataset, preprocessing, normalization, model,
                       filename_targets=labels,
                       preprocessing=getattr(KaggleDR, normalization))
     else:
-        print('Unknown dataset, aborting.')
-        return
+        print('Constructing a dataset from the images in:', dataset)
+        ds = DatasetFromDirectory(path_data=dataset,
+                                  preprocessing=getattr(KaggleDR,
+                                                        normalization))
 
     if model == 'JFnet':
         model_name = model
@@ -105,6 +108,7 @@ def main(mc_samples, dataset, preprocessing, normalization, model,
                                    model=model_name)
     with open(out_file, 'wb') as h:
         pickle.dump(results, h)
+
 
 if __name__ == '__main__':
     import sys

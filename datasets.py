@@ -1,5 +1,5 @@
 from __future__ import print_function
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 import glob
 import os
 import threading
@@ -16,6 +16,11 @@ import theano
 import sklearn.cross_validation as skcv
 
 
+def get_image_filenames(directory, ext='.jpeg'):
+    return np.array(map(lambda fn: fn.split('/')[-1].split('.')[0],
+                        glob.glob(directory + '/*' + ext)))
+
+
 class Dataset(object):
     """Base class for actual datasets"""
 
@@ -25,6 +30,13 @@ class Dataset(object):
         """Just for documenting the properties"""
         self._n_samples = None
         self._y = None
+        self.path_data = None
+        self.image_filenames = None
+        self.X = None
+        # because self.X might be a subset of the entire data set, we track
+        # wich samples we have cached
+        self.indices_in_X = None
+        self.preprocessing = None
 
     @property
     def n_samples(self):
@@ -35,24 +47,6 @@ class Dataset(object):
     def y(self):
         """Labels"""
         return self._y
-
-    @abstractmethod
-    def load_batch(self, indices):
-        """
-        Load a batch of data samples together with labels
-
-        Parameters
-        ----------
-        indices: array-like, shape = (n_samples,)
-            with respect to the entire data set
-
-        Returns
-        -------
-        X : numpy array, shape = (n_samples, n_channels, n_rows, n_columns)
-            batch of data
-        y : numpy array, shape = (n_samples,)
-
-        """
 
     def generate_indices(self, train_frac, val_frac, test_frac, shuffle=False):
         """Generate indices for training, validation and test data.
@@ -158,6 +152,90 @@ class Dataset(object):
                                             len(indices))]
             yield self.load_batch(excerpt)
 
+    def load_image(self, filename):
+        """
+        Load image.
+
+        Parameters
+        ----------
+        filename : string
+            relative filename (path to image folder gets prefixed)
+
+        Returns
+        -------
+        image : numpy array, shape = (n_rows, n_columns, n_channels)
+
+        """
+
+        filename = os.path.join(self.path_data, filename + '.jpeg')
+        return np.array(Image.open(filename))
+
+    def prepare_image(self, im):
+        """
+        Prepare image.
+
+        Parameters
+        ----------
+        im : numpy array, shape = (n_rows, n_columns, n_channels)
+
+        Returns
+        -------
+        processed image : numpy array, shape = (n_channels, n_rows, n_columns)
+                                       dtype = floatX
+
+        """
+
+        im = floatX(np.transpose(im, (2, 0, 1)))
+        return self.preprocessing(im)
+
+    def load_batch(self, indices):
+        """
+        Load a batch of preprocessed data samples together with labels
+
+        Parameters
+        ----------
+        indices: array-like, shape = (n_samples,)
+            with respect to the entire data set
+
+        Returns
+        -------
+        X : numpy array, shape = (n_samples, n_channels, n_rows, n_columns)
+            batch of data
+        y : numpy array, shape = (n_samples,)
+
+        """
+
+        if self.indices_in_X is not None and self.X is not None:
+            # map indices [0, n_all_samples] to [0, n_stored_samples] while
+            # preserving order
+            select_from_cached = np.array(
+                [np.where(self.indices_in_X == idx)[0][0] for idx in indices])
+            assert len(select_from_cached) == len(indices)
+            return self.X[select_from_cached], self.y[indices]
+
+        else:
+            X = np.array([self.prepare_image(self.load_image(fn)) for fn in
+                          self.image_filenames[indices]])
+            y = self.y[indices]
+            assert len(X) == len(y) == len(indices)
+            return X, y
+
+    def load_data(self, indices):
+        """
+        Load data, preprocess and cache data
+
+        Parameters
+        ----------
+
+        indices : array_like, shape = (n_samples,)
+            absolute index values refer to position in trainLabels.csv
+
+        """
+
+        self.X = np.array([self.prepare_image(self.load_image(fn)) for fn in
+                           self.image_filenames[indices]])
+        self.indices_in_X = indices
+
 
 class KaggleDR(Dataset):
     """
@@ -252,85 +330,6 @@ class KaggleDR(Dataset):
                                      accepted_images_right))
         return df[df.image.isin(accepted_images)]
 
-    def load_image(self, filename):
-        """
-        Load image.
-
-        Parameters
-        ----------
-        filename : string
-            relative filename (path to image folder gets prefixed)
-
-        Returns
-        -------
-        image : numpy array, shape = (n_rows, n_columns, n_channels)
-
-        """
-
-        filename = os.path.join(self.path_data, filename + '.jpeg')
-        return np.array(Image.open(filename))
-
-    def prepare_image(self, im):
-        """
-        Prepare image.
-
-        Parameters
-        ----------
-        im : numpy array, shape = (n_rows, n_columns, n_channels)
-
-        Returns
-        -------
-        processed image : numpy array, shape = (n_channels, n_rows, n_columns)
-                                       dtype = floatX
-
-        """
-
-        im = floatX(np.transpose(im, (2, 0, 1)))
-        return self.preprocessing(im)
-
-    def load_batch(self, indices):
-        """
-        Load batch of preprocessed data samples together with labels
-
-        Parameters
-        ----------
-
-        indices : array_like, shape = (batch_size,)
-            absolute index values refer to position in trainLabels.csv
-
-        """
-
-        if self.indices_in_X is not None and self.X is not None:
-            # map indices [0, n_all_samples] to [0, n_stored_samples] while
-            # preserving order
-            select_from_cached = np.array(
-                [np.where(self.indices_in_X == idx)[0][0] for idx in indices])
-            assert len(select_from_cached) == len(indices)
-            return self.X[select_from_cached], self.y[indices]
-
-        else:
-            X = np.array([self.prepare_image(self.load_image(fn)) for fn in
-                          self.image_filenames[indices]])
-            y = self.y[indices]
-            assert len(X) == len(y) == len(indices)
-            return X, y
-
-    def load_data(self, indices):
-        """
-        Load data, preprocess and cache data
-
-        Parameters
-        ----------
-
-        indices : array_like, shape = (n_samples,)
-            absolute index values refer to position in trainLabels.csv
-
-        """
-
-        self.X = np.array([self.prepare_image(self.load_image(fn)) for fn in
-                           self.image_filenames[indices]])
-        self.indices_in_X = indices
-
 
 class Messidor(KaggleDR):
 
@@ -387,6 +386,20 @@ class Messidor(KaggleDR):
     @staticmethod
     def contralateral_agreement(df):
         raise NotImplementedError('Undefined for Messidor.')
+
+
+class DatasetFromDirectory(Dataset):
+    """Works without labels"""
+
+    def __init__(self, path_data=None, ext='.jpeg', preprocessing=None):
+        self.path_data = path_data
+        self.image_filenames = get_image_filenames(path_data, ext)
+        self._n_samples = len(self.image_filenames)
+        self._y = np.array([None] * self._n_samples)
+
+        self.X = None
+        self.indices_in_X = None
+        self.preprocessing = preprocessing
 
 
 class DatasetImageDataGenerator(ImageDataGenerator):
