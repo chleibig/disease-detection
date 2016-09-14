@@ -35,7 +35,7 @@ plt.ylabel('density')
 plt.legend(loc='upper right')
 
 plt.subplot(122)
-plt.title('(a) DNN for disease onset 2')
+plt.title('(b) DNN for disease onset 2')
 sns.kdeplot(pred_std_kaggle_2, shade=True, label='FUNDUS images')
 sns.kdeplot(pred_std_imagenet_2, shade=True, label='non-FUNDUS images')
 plt.xlabel('model uncertainty')
