@@ -58,11 +58,11 @@ def convert(fname, crop_size, enhance_contrast=False, ignore_grayscale=False):
         converted = im
 
     # Resize without preserving aspect ratio:
-    converted = converted.resize((crop_size, crop_size),
-                                 resample=Image.BILINEAR)
+    # converted = converted.resize((crop_size, crop_size),
+    #                              resample=Image.BILINEAR)
 
     if enhance_contrast:
-        im_ce_as_array = contrast_enhance(np.asarray(converted),
+        im_ce_as_array = contrast_enhance(0.1 * np.asarray(converted),
                                           radius=crop_size // 2)
         converted = Image.fromarray(im_ce_as_array.astype(np.uint8))
 
