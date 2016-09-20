@@ -5,7 +5,7 @@ import numpy as np
 import bokeh.plotting as bp
 import bokeh.client as bc
 import seaborn as sns
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, roc_auc_score
 import keras.callbacks
 from keras import backend as K
 
@@ -344,7 +344,7 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
 
     f_diseased_r, t_diseased_r, thresholds = roc_curve(y_true, y_score,
                                                        pos_label=pos_label)
-    roc_auc = auc(f_diseased_r, t_diseased_r, reorder=True)
+    roc_auc = roc_auc_score(y_true, y_score)
 
     plt.plot(f_diseased_r, t_diseased_r,
              label=legend_prefix + ' (auc=%0.3f)' % roc_auc)
