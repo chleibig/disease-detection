@@ -127,34 +127,6 @@ def rel_freq(y, k):
     return (y == k).sum()/float(len(y))
 
 
-def stratified_mask(y, y_prior, shuffle=False):
-    """Get mask such that y[mask] has the same size and class freq. as y_prior
-
-    Parameters
-    ==========
-    y : array with labels
-    y_prior: subset of y, defining the relative class frequencies
-    shuffle: bool, False by default
-        random selection from the pool of each class
-
-    Returns
-    =======
-    select: bool. array of the same size as y with len(y_prior) True entries
-
-
-    """
-    classes = np.unique(y_prior)
-    k_n = {k: (y_prior == k).sum() for k in classes}
-    mask = np.array(len(y) * [False])
-    for k, n in k_n.iteritems():
-        idx_k = np.where(y == k)[0]
-        if shuffle:
-            np.random.shuffle(idx_k)
-        select_n_from_k = idx_k[:n]
-        mask[select_n_from_k] = True
-    return mask
-
-
 def contralateral_agreement(y, config):
     """Get boolean array of contralateral label agreement
 
@@ -190,17 +162,14 @@ def performance_over_uncertainty_tol(uncertainty, y, probs, measure, config):
 
     p = np.zeros_like(uncertainty_tol)
     p_rand = np.zeros_like(uncertainty_tol)
-    p_strat = np.zeros_like(uncertainty_tol)
 
     for i, ut in enumerate(uncertainty_tol):
         accept = accept_idx[i]
         rand_sel = np.random.permutation(accept)
-        strat_sel = stratified_mask(y, y[accept], shuffle=True)
         p[i] = measure(y[accept], probs[accept])
         p_rand[i] = measure(y[rand_sel], probs[rand_sel])
-        p_strat[i] = measure(y[strat_sel], probs[strat_sel])
 
-    return uncertainty_tol, frac_retain, p, p_rand, p_strat
+    return uncertainty_tol, frac_retain, p, p_rand
 
 
 def sample_rejection(uncertainty, min_percentile):
@@ -230,12 +199,12 @@ def acc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
 
     min_acc = 1.0
     for k, v in uncertainties.iteritems():
-        v_tol, frac_retain, acc, acc_rand, acc_strat = \
+        v_tol, frac_retain, acc, acc_rand = \
             performance_over_uncertainty_tol(v, y, y_score, accuracy, config)
         ax121.plot(v_tol, acc, label=k)
         ax122.plot(frac_retain, acc, label=k)
-        if min_acc > min(np.concatenate((acc, acc_rand, acc_strat))):
-            min_acc = min(np.concatenate((acc, acc_rand, acc_strat)))
+        if min_acc > min(np.concatenate((acc, acc_rand))):
+            min_acc = min(np.concatenate((acc, acc_rand)))
 
     ax121.set_ylim(min_acc, 1)
     ax122.set_ylim(min_acc, 1)
@@ -244,7 +213,6 @@ def acc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
     ax121.legend(loc='best')
 
     ax122.plot(frac_retain, acc_rand, label='randomly rejected')
-    ax122.plot(frac_retain, acc_strat, label='prior preserved')
     ax122.set_xlabel('fraction of retained data')
     ax122.legend(loc='best')
 
@@ -368,7 +336,7 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
     ax2223.set_title('(c)')
 
     for k, v in uncertainties.iteritems():
-        v_tol, frac_retain, auc, auc_rand, auc_strat = \
+        v_tol, frac_retain, auc, auc_rand = \
             performance_over_uncertainty_tol(v, y, y_score,
                                              roc_auc_score,
                                              config)
@@ -391,7 +359,6 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
     ax220.legend(loc='best')
 
     ax221.plot(frac_retain, auc_rand, label='randomly rejected')
-    ax221.plot(frac_retain, auc_strat, label='prior preserved')
     ax221.set_xlabel('fraction of retained data')
     ax221.legend(loc='best')
 
