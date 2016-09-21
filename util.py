@@ -1,9 +1,11 @@
 from __future__ import division
 
+from collections import namedtuple
 import matplotlib.pyplot as plt
 import numpy as np
 import bokeh.plotting as bp
 import bokeh.client as bc
+from scipy import interpolate
 import seaborn as sns
 from sklearn.metrics import roc_curve, roc_auc_score
 import keras.callbacks
@@ -314,7 +316,8 @@ class SelectiveSampler(object):
 
 
 def roc_curve_plot(y_true, y_score, pos_label=1,
-                   legend_prefix='', plot_BDA=False):
+                   legend_prefix='', plot_BDA=False, n_bootstrap=100,
+                   color=None):
     """Compute and plot receiver operating characteristic (ROC)
 
     Parameters
@@ -342,12 +345,27 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
     assert len(y_true) == len(y_score), \
         'y_true and y_score must both be n_samples long'
 
-    f_diseased_r, t_diseased_r, thresholds = roc_curve(y_true, y_score,
-                                                       pos_label=pos_label)
+    low, high = bootstrap([y_true, y_score], roc_auc_score,
+                          n_resamples=n_bootstrap, alpha=0.05)
+
+    fdr_low, tdr_low, _ = roc_curve(y_true[low.index],
+                                    y_score[low.index],
+                                    pos_label=pos_label)
+    fdr_high, tdr_high, _ = roc_curve(y_true[high.index],
+                                      y_score[high.index],
+                                      pos_label=pos_label)
+    interpolate_low = interpolate.interp1d(fdr_low, tdr_low, kind='nearest')
+    interpolate_high = interpolate.interp1d(fdr_high, tdr_high, kind='nearest')
+
+    fdr, tdr, _ = roc_curve(y_true, y_score,
+                            pos_label=pos_label)
     roc_auc = roc_auc_score(y_true, y_score)
 
-    plt.plot(f_diseased_r, t_diseased_r,
-             label=legend_prefix + ' (auc=%0.3f)' % roc_auc)
+    plt.plot(fdr, tdr, color=color,
+             label=legend_prefix + ' (auc:%0.3f; CI:%0.3f-%0.3f)'
+             % (roc_auc, low.value, high.value))
+    plt.fill_between(fdr, interpolate_high(fdr), tdr, color=color, alpha=0.3)
+    plt.fill_between(fdr, tdr, interpolate_low(fdr), color=color, alpha=0.3)
     plt.plot([0, 1], [0, 1], 'k--')
     if plot_BDA:
         plt.scatter([0.05], [0.8], color='g', s=50,
@@ -357,3 +375,32 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
     plt.xlabel('false diseased rate (1 - specificity)')
     plt.ylabel('true diseased rate (sensitivity)')
     plt.legend(loc="lower right")
+
+
+def bootstrap(data, fun, n_resamples=10000, alpha=0.05):
+    """Compute confidence interval for values of function fun
+
+    Parameters
+    ==========
+    data: list of arguments to fun
+
+    """
+    assert isinstance(data, list)
+    n_samples = len(data[0])
+    idx = np.random.randint(0, n_samples, (n_resamples, n_samples))
+
+    def select(data, sample):
+        return [d[sample] for d in data]
+
+    values = np.array([fun(*select(data, sample)) for sample in idx])
+
+    idx = idx[np.argsort(values, axis=0)]
+    values = np.sort(values, axis=0)
+
+    stat = namedtuple('stat', ['value', 'index'])
+    low = stat(value=values[int((alpha/2.0)*n_resamples)],
+               index=idx[int((alpha/2.0)*n_resamples)])
+    high = stat(value=values[int((1-alpha/2.0)*n_resamples)],
+                index=idx[int((1-alpha/2.0)*n_resamples)])
+
+    return low, high

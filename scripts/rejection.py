@@ -357,6 +357,8 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
     if fig is None:
         fig = plt.figure(figsize=A4_WIDTH_SQUARE)
 
+    colors = sns.color_palette()
+
     ax220 = plt.subplot2grid((2, 2), (0, 0))
     ax221 = plt.subplot2grid((2, 2), (0, 1))
     ax2223 = plt.subplot2grid((2, 2), (1, 0), colspan=2)
@@ -376,10 +378,11 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
 
         ax2223
         fractions = [0.9, 0.8, 0.7]
-        for f in fractions:
+        for i, f in enumerate(fractions):
             thr = v_tol[frac_retain >= f][0]
             roc_curve_plot(y[v <= thr],
                            y_score[v <= thr],
+                           color=colors[i + 1],
                            legend_prefix='%d%% data retained, %s' % (f * 100,
                                                                      k))
 
@@ -393,8 +396,11 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, disease_onset, config,
     ax221.legend(loc='best')
 
     ax2223
-    roc_curve_plot(y, y_score, legend_prefix='without rejection',
+    roc_curve_plot(y, y_score, color=colors[0],
+                   legend_prefix='without rejection',
                    plot_BDA=True)
+
+    ax2223.set_aspect(1.0)
 
     if save:
         fig.savefig('roc_' + str(disease_onset) + format)
@@ -518,16 +524,11 @@ def main():
              image_path=config['IMAGE_PATH'],
              level=config['LEVEL'])
 
-        print('Please resize and save this figure to your needs,'
-              'then press "c"')
-        import ipdb
-        ipdb.set_trace()
-
         acc_rejection_figure(y_bin, pred_mean, uncertainties, dl, config,
                              save=True, format='.png')
 
         roc_auc_rejection_figure(y_bin, pred_mean, uncertainties, dl, config,
-                                 save=True, format='.png')
+                                 save=True, format='.svg')
 
         level_rejection_figure(y, pred_std, dl, config,
                                save=True, format='.svg')
