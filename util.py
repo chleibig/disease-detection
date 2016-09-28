@@ -316,7 +316,7 @@ class SelectiveSampler(object):
 
 
 def roc_curve_plot(y_true, y_score, pos_label=1,
-                   legend_prefix='', plot_BDA=False, n_bootstrap=100,
+                   legend_prefix='', plot_BDA=False, n_bootstrap=10000,
                    color=None):
     """Compute and plot receiver operating characteristic (ROC)
 
@@ -363,7 +363,7 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
 
     plt.plot(fdr, tdr, color=color,
              label=legend_prefix + ' (auc:%0.3f; CI:%0.3f-%0.3f)'
-             % (roc_auc, low.value, high.value))
+             % (roc_auc, low.value, high.value), linewidth=2)
     plt.fill_between(fdr, interpolate_high(fdr), tdr, color=color, alpha=0.3)
     plt.fill_between(fdr, tdr, interpolate_low(fdr), color=color, alpha=0.3)
     plt.plot([0, 1], [0, 1], 'k--')
@@ -371,7 +371,7 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
         plt.scatter([0.05], [0.8], color='g', s=50,
                     label='recommendation British Diabetic Association')
     plt.xlim([0.0, 1.0])
-    plt.ylim([0.0, 1.05])
+    plt.ylim([0.0, 1.0])
     plt.xlabel('false diseased rate (1 - specificity)')
     plt.ylabel('true diseased rate (sensitivity)')
     plt.legend(loc="lower right")
