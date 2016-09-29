@@ -27,6 +27,16 @@ TAG = {0: 'healthy', 1: 'diseased'}
 ONSET_TAG = {1: 'mild DR', 2: 'moderate DR'}
 
 DATA = {
+    'KaggleDR_train':
+        {'LABELS_FILE': 'data/kaggle_dr/trainLabels.csv',
+         'IMAGE_PATH': 'data/kaggle_dr/train_JF_512',
+         'LEVEL': OrderedDict([(0, 'no DR'),
+                               (1, 'mild DR'),
+                               (2, 'moderate DR'),
+                               (3, 'severe DR'),
+                               (4, 'proliferative DR')]),
+         'min_percentile': 50,
+         'n_bootstrap': 10000},
     'KaggleDR':
         {'LABELS_FILE': 'data/kaggle_dr/retinopathy_solution.csv',
          'IMAGE_PATH': 'data/kaggle_dr/test_JF_512',
@@ -49,6 +59,14 @@ DATA = {
 }
 
 CONFIG = {
+    'BayesJF17_mildDR_Kaggle_train': dict(
+        [('net', 'Bayesian JFnet'),
+         ('dataset', 'Kaggle DR train'),
+         ('predictions', 'data/processed/'
+          '100_mc_KaggleDR_train_BayesJFnet17_392bea6.pkl'),
+         ('disease_onset', 1)] +
+        DATA['KaggleDR_train'].items()),
+
     'BayesJF17_mildDR_Kaggle': dict(
         [('net', 'Bayesian JFnet'),
          ('dataset', 'Kaggle DR'),
