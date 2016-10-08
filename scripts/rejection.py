@@ -23,6 +23,8 @@ plt.ion()
 sns.set_context('paper', font_scale=2)
 
 A4_WIDTH_SQUARE = (8.27, 8.27)
+A4_WIDTH = 8.27
+
 TAG = {0: 'healthy', 1: 'diseased'}
 ONSET_TAG = {1: 'mild DR', 2: 'moderate DR'}
 
@@ -514,6 +516,49 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, config,
     return {name: fig}
 
 
+def train_test_generalization():
+    """Visualizes performance over uncertainty for both train and test data"""
+    fig = plt.figure(figsize=(A4_WIDTH / 2.0,
+                              A4_WIDTH / 2.0))
+    ax = fig.gca()
+    colors = sns.color_palette()
+
+    configs = {'$\sigma_{pred} (train)$':
+               CONFIG['BayesJF17_mildDR_Kaggle_train'],
+               '$\sigma_{pred} (test)$':
+               CONFIG['BayesJF17_mildDR_Kaggle']}
+
+    for i, (k, config) in enumerate(configs.iteritems()):
+        y = load_labels(config['LABELS_FILE'])
+        probs, probs_mc = load_predictions(config['predictions'])
+        y_bin, probs_bin, probs_mc_bin = detection_task(
+            y, probs, probs_mc, config['disease_onset'])
+        pred_mean, pred_std = posterior_statistics(probs_mc_bin)
+
+        v_tol, _, auc, auc_rand = \
+            performance_over_uncertainty_tol(pred_std, y_bin, pred_mean,
+                                             roc_auc_score,
+                                             config['min_percentile'],
+                                             config['n_bootstrap'])
+        ax.plot(v_tol, auc['value'],
+                label=k, color=colors[i], linewidth=2)
+        ax.fill_between(v_tol, auc['value'], auc['low'],
+                        color=colors[i], alpha=0.3)
+        ax.fill_between(v_tol, auc['high'], auc['value'],
+                        color=colors[i], alpha=0.3)
+
+    ax.set_xlabel('tolerated model uncertainty [$\sigma_{pred}$]')
+    ax.set_ylabel('roc_auc')
+    ax.legend(loc='best')
+
+    name = 'train_test_' + config['net'] + '_' + \
+           str(config['disease_onset']) + '_' + config['dataset']
+
+    fig.savefig(name + '.pdf')
+
+    return {name: fig}
+
+
 def error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
                                   label='pred_std', ax=None):
     """Plot conditional pdfs for correct and erroneous argmax predictions"""
@@ -678,6 +723,9 @@ def main():
             f = label_disagreement_figure(y_bin, pred_std, config,
                                           save=False)
             figures.append(f)
+
+    f = train_test_generalization()
+    figures.append(f)
 
     return figures
 
