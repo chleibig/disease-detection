@@ -634,8 +634,8 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
         ax.get_yaxis().set_visible(False)
         ax.set_aspect(1 / ax.get_ylim()[1])
 
-    ax = plt.subplot2grid((2, 2 * len(examples)), (1, 0),
-                          colspan=2 * len(examples))
+    ax = plt.subplot2grid((2, 2 * len(examples)), (1, 1),
+                          colspan=4)
     ax.set_title('(d)', loc='left')
     error_conditional_uncertainty(y, y_score, uncertainty,
                                   config['disease_onset'],
