@@ -370,8 +370,8 @@ def level_rejection_figure(y_level, uncertainty, config,
         ax121.set_ylim(0, 1)
         ax122.set_ylim(0, 1)
 
-        ax121.set_xlabel('minimum model uncertainty')
-        ax121.set_ylabel('relative proportions within rejected dataset')
+        ax121.set_xlabel('tolerated model uncertainty')
+        ax121.set_ylabel('relative proportions within referred dataset')
         ax121.legend(loc='lower center')
         ax122.set_xlabel('fraction of retained data')
         ax122.legend(loc='lower center')
