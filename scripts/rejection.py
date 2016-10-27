@@ -399,7 +399,7 @@ def label_disagreement_figure(y, uncertainty, config,
 
     tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.1)
 
-    p_rejected = np.array([sum((~accept) & (disagreeing))/float(sum(~accept))
+    p_referred = np.array([sum((~accept) & (disagreeing))/float(sum(~accept))
                            for accept in accept_idx])
     p_retained = np.array([sum((accept) & (disagreeing))/float(sum(accept))
                            for accept in accept_idx])
@@ -411,12 +411,12 @@ def label_disagreement_figure(y, uncertainty, config,
         ax121.set_title('(a)')
         ax122.set_title('(b)')
 
-        ax121.fill_between(tol, p_rejected, 0, alpha=0.5,
-                           color=sns.color_palette()[0], label='rejected')
+        ax121.fill_between(tol, p_referred, 0, alpha=0.5,
+                           color=sns.color_palette()[0], label='referred')
         ax121.fill_between(tol, p_retained, 0, alpha=0.5,
                            color=sns.color_palette()[1], label='retained')
-        ax122.fill_between(frac_retain, p_rejected, 0, alpha=0.5,
-                           color=sns.color_palette()[0], label='rejected')
+        ax122.fill_between(frac_retain, p_referred, 0, alpha=0.5,
+                           color=sns.color_palette()[0], label='referred')
         ax122.fill_between(frac_retain, p_retained, 0, alpha=0.5,
                            color=sns.color_palette()[1], label='retained')
 
