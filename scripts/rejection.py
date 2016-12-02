@@ -23,10 +23,22 @@ plt.ion()
 sns.set_context('paper', font_scale=2)
 
 A4_WIDTH_SQUARE = (8.27, 8.27)
+A4_WIDTH = 8.27
+
 TAG = {0: 'healthy', 1: 'diseased'}
 ONSET_TAG = {1: 'mild DR', 2: 'moderate DR'}
 
 DATA = {
+    'KaggleDR_train':
+        {'LABELS_FILE': 'data/kaggle_dr/trainLabels.csv',
+         'IMAGE_PATH': 'data/kaggle_dr/train_JF_512',
+         'LEVEL': OrderedDict([(0, 'no DR'),
+                               (1, 'mild DR'),
+                               (2, 'moderate DR'),
+                               (3, 'severe DR'),
+                               (4, 'proliferative DR')]),
+         'min_percentile': 50,
+         'n_bootstrap': 10000},
     'KaggleDR':
         {'LABELS_FILE': 'data/kaggle_dr/retinopathy_solution.csv',
          'IMAGE_PATH': 'data/kaggle_dr/test_JF_512',
@@ -49,6 +61,14 @@ DATA = {
 }
 
 CONFIG = {
+    'BayesJF17_mildDR_Kaggle_train': dict(
+        [('net', 'Bayesian JFnet'),
+         ('dataset', 'Kaggle DR train'),
+         ('predictions', 'data/processed/'
+          '100_mc_KaggleDR_train_BayesJFnet17_392bea6.pkl'),
+         ('disease_onset', 1)] +
+        DATA['KaggleDR_train'].items()),
+
     'BayesJF17_mildDR_Kaggle': dict(
         [('net', 'Bayesian JFnet'),
          ('dataset', 'Kaggle DR'),
@@ -350,8 +370,8 @@ def level_rejection_figure(y_level, uncertainty, config,
         ax121.set_ylim(0, 1)
         ax122.set_ylim(0, 1)
 
-        ax121.set_xlabel('minimum model uncertainty')
-        ax121.set_ylabel('relative proportions within rejected dataset')
+        ax121.set_xlabel('tolerated model uncertainty')
+        ax121.set_ylabel('relative proportions within referred dataset')
         ax121.legend(loc='lower center')
         ax122.set_xlabel('fraction of retained data')
         ax122.legend(loc='lower center')
@@ -379,7 +399,7 @@ def label_disagreement_figure(y, uncertainty, config,
 
     tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.1)
 
-    p_rejected = np.array([sum((~accept) & (disagreeing))/float(sum(~accept))
+    p_referred = np.array([sum((~accept) & (disagreeing))/float(sum(~accept))
                            for accept in accept_idx])
     p_retained = np.array([sum((accept) & (disagreeing))/float(sum(accept))
                            for accept in accept_idx])
@@ -391,12 +411,12 @@ def label_disagreement_figure(y, uncertainty, config,
         ax121.set_title('(a)')
         ax122.set_title('(b)')
 
-        ax121.fill_between(tol, p_rejected, 0, alpha=0.5,
-                           color=sns.color_palette()[0], label='rejected')
+        ax121.fill_between(tol, p_referred, 0, alpha=0.5,
+                           color=sns.color_palette()[0], label='referred')
         ax121.fill_between(tol, p_retained, 0, alpha=0.5,
                            color=sns.color_palette()[1], label='retained')
-        ax122.fill_between(frac_retain, p_rejected, 0, alpha=0.5,
-                           color=sns.color_palette()[0], label='rejected')
+        ax122.fill_between(frac_retain, p_referred, 0, alpha=0.5,
+                           color=sns.color_palette()[0], label='referred')
         ax122.fill_between(frac_retain, p_retained, 0, alpha=0.5,
                            color=sns.color_palette()[1], label='retained')
 
@@ -496,6 +516,49 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, config,
     return {name: fig}
 
 
+def train_test_generalization():
+    """Visualizes performance over uncertainty for both train and test data"""
+    fig = plt.figure(figsize=(A4_WIDTH / 2.0,
+                              A4_WIDTH / 2.0))
+    ax = fig.gca()
+    colors = sns.color_palette()
+
+    configs = {'$\sigma_{pred} (train)$':
+               CONFIG['BayesJF17_mildDR_Kaggle_train'],
+               '$\sigma_{pred} (test)$':
+               CONFIG['BayesJF17_mildDR_Kaggle']}
+
+    for i, (k, config) in enumerate(configs.iteritems()):
+        y = load_labels(config['LABELS_FILE'])
+        probs, probs_mc = load_predictions(config['predictions'])
+        y_bin, probs_bin, probs_mc_bin = detection_task(
+            y, probs, probs_mc, config['disease_onset'])
+        pred_mean, pred_std = posterior_statistics(probs_mc_bin)
+
+        v_tol, _, auc, auc_rand = \
+            performance_over_uncertainty_tol(pred_std, y_bin, pred_mean,
+                                             roc_auc_score,
+                                             config['min_percentile'],
+                                             config['n_bootstrap'])
+        ax.plot(v_tol, auc['value'],
+                label=k, color=colors[i], linewidth=2)
+        ax.fill_between(v_tol, auc['value'], auc['low'],
+                        color=colors[i], alpha=0.3)
+        ax.fill_between(v_tol, auc['high'], auc['value'],
+                        color=colors[i], alpha=0.3)
+
+    ax.set_xlabel('tolerated model uncertainty [$\sigma_{pred}$]')
+    ax.set_ylabel('roc_auc')
+    ax.legend(loc='best')
+
+    name = 'train_test_' + config['net'] + '_' + \
+           str(config['disease_onset']) + '_' + config['dataset']
+
+    fig.savefig(name + '.pdf')
+
+    return {name: fig}
+
+
 def error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
                                   label='pred_std', ax=None):
     """Plot conditional pdfs for correct and erroneous argmax predictions"""
@@ -571,8 +634,8 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
         ax.get_yaxis().set_visible(False)
         ax.set_aspect(1 / ax.get_ylim()[1])
 
-    ax = plt.subplot2grid((2, 2 * len(examples)), (1, 0),
-                          colspan=2 * len(examples))
+    ax = plt.subplot2grid((2, 2 * len(examples)), (1, 1),
+                          colspan=4)
     ax.set_title('(d)', loc='left')
     error_conditional_uncertainty(y, y_score, uncertainty,
                                   config['disease_onset'],
@@ -660,6 +723,9 @@ def main():
             f = label_disagreement_figure(y_bin, pred_std, config,
                                           save=False)
             figures.append(f)
+
+    f = train_test_generalization()
+    figures.append(f)
 
     return figures
 
