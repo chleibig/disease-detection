@@ -273,9 +273,11 @@ class JFnetMono(Model):
         network['global_pool'] = lasagne.layers.ConcatLayer([mean_pooled,
                                                              max_pooled],
                                                             axis=1)
-        network['logreg'] = DenseLayer(network['global_pool'],
-                                       num_units=n_classes,
-                                       nonlinearity=softmax)
+        network['softmax_input'] = DenseLayer(network['global_pool'],
+                                              num_units=n_classes,
+                                              nonlinearity=None)
+        network['logreg'] = NonlinearityLayer(network['softmax_input'],
+                                              nonlinearity=softmax)
 
         if weights is not None:
             load_weights(network['logreg'], weights)
