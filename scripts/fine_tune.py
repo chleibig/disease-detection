@@ -9,7 +9,7 @@ import theano.tensor as T
 import lasagne
 from lasagne.regularization import regularize_network_params, l2
 from lasagne.regularization import regularize_layer_params, l1
-from sklearn.cross_validation import train_test_split
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 
 from keras.utils.generic_utils import Progbar

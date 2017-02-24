@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from PIL import Image
 import theano
-import sklearn.cross_validation as skcv
+import sklearn.model_selection as ms
 
 
 def get_image_filenames(directory, ext='.jpeg'):
@@ -119,11 +119,12 @@ class Dataset(object):
         else:
             seed = None
 
-        return next(skcv.StratifiedShuffleSplit(self.y, n_iter=1,
-                                                test_size=test_size,
-                                                train_size=train_size,
-                                                random_state=seed)
-                    .__iter__())
+        sss = ms.StratifiedShuffleSplit(n_splits=1,
+                                        test_size=test_size,
+                                        train_size=train_size,
+                                        random_state=seed)
+
+        return next(sss.split(np.empty_like(self.y), self.y))
 
     def iterate_minibatches(self, indices, batch_size, shuffle=False):
         """

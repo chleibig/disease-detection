@@ -25,7 +25,7 @@ class TestDataset:
 
         n_samples = 1000
         rel_freq = [0.73, 0.07, 0.15, 0.03, 0.02]
-        y = np.concatenate([np.ones(rf * n_samples, dtype=np.int32) * i
+        y = np.concatenate([np.ones((int(rf * n_samples),), dtype=np.int32) * i
                             for i, rf in enumerate(rel_freq)])
         np.random.shuffle(y)
         return SimpleDataset(y)
