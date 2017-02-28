@@ -628,10 +628,11 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
         plt.arrow(0.5, y_pos, length, 0, **arrow_params)
         plt.arrow(0.5, y_pos, -length, 0, **arrow_params)
         plt.xlabel('p(diseased | image)')
-        plt.ylabel('density')
+        plt.ylabel('density [a.u.]')
         plt.title('$\mu_{pred}$ = %.2f' % y_score[asc][i], loc='left')
         plt.xlim(0, 1)
-        ax.get_yaxis().set_visible(False)
+        ax.get_yaxis().set_ticks([])
+        ax.get_yaxis().set_ticklabels([])
         ax.set_aspect(1 / ax.get_ylim()[1])
 
     ax = plt.subplot2grid((2, 2 * len(examples)), (1, 1),
