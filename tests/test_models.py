@@ -74,6 +74,7 @@ def test_bcnn2_b69aadd():
     from datasets import KaggleDR
     import models
 
+    # values from 100_mc_KaggleDR_test_BayesianJFnet17_onset2_b69aadd_run0.pkl
     det_out = np.array([[0.89167184, 0.10832818],
                         [0.92720264, 0.07279734],
                         [0.90044737, 0.09955268],
@@ -102,3 +103,57 @@ def test_bcnn2_b69aadd():
         idx += n_s
 
     nt.assert_array_almost_equal(det_out, pred_det, decimal=4)
+
+
+def test_bcnn2_b69aadd_stochastic():
+    import numpy as np
+
+    from datasets import KaggleDR
+    import models
+
+    # values from 100_mc_KaggleDR_test_BayesianJFnet17_onset2_b69aadd_run0.pkl
+    pred_mean = np.array([[0.68195665, 0.31804341],
+                          [0.80271965, 0.19728029],
+                          [0.74508584, 0.25491425],
+                          [0.79648483, 0.20351513],
+                          [0.0026095, 0.99739057],
+                          [0.19050229, 0.80949777],
+                          [0.28163588, 0.71836412],
+                          [0.79003274, 0.20996727],
+                          [0.92445976, 0.07554021],
+                          [0.94247276, 0.05752729]], dtype=np.float32)
+    # values from 100_mc_KaggleDR_test_BayesianJFnet17_onset2_b69aadd_run0.pkl
+    pred_std = np.array([[0.07996751, 0.07996751],
+                         [0.06707104, 0.06707104],
+                         [0.09037413, 0.09037412],
+                         [0.08966902, 0.08966902],
+                         [0.0021527, 0.0021527],
+                         [0.07645655, 0.07645656],
+                         [0.09247997, 0.09247997],
+                         [0.03672459, 0.03672459],
+                         [0.01923835, 0.01923835],
+                         [0.01264347, 0.01264348]], dtype=np.float32)
+
+    ds = KaggleDR(path_data='tests/ref_data/KDR/sampleTest_JF_BG_512',
+                  filename_targets='tests/ref_data/KDR/sampleLabelsTest.csv',
+                  preprocessing=KaggleDR.standard_normalize)
+    mc_samples = np.zeros((ds.n_samples, 2, 100), dtype=np.float32)
+
+    model = models.JFnetMono(p_conv=0.2, last_layer='17',
+                             weights='models/weights_bcnn2_b69aadd.npz')
+
+    idx = 0
+    for X, _ in ds.iterate_minibatches(np.arange(ds.n_samples),
+                                       batch_size=2,
+                                       shuffle=False):
+        n_s = X.shape[0]
+        mc_samples[idx:idx + n_s] = model.mc_samples(X, T=100)
+        idx += n_s
+
+    # decimal = 1 was sufficient for comparing different runs of bcnn1:
+    # 100_mc_KaggleDR_test_BayesJFnet17_392bea6_run4.pkl with
+    # 100_mc_KaggleDR_test_BayesJFnet17_392bea6_run4.pkl
+    nt.assert_array_almost_equal(mc_samples.mean(axis=-1), pred_mean,
+                                 decimal=1)
+    nt.assert_array_almost_equal(mc_samples.std(axis=-1), pred_std,
+                                 decimal=1)
