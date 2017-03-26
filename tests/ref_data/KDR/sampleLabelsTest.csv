@@ -1,0 +1,11 @@
+,image,level,Usage
+0,1_left,0,Private
+1,1_right,0,Private
+2,2_left,0,Public
+3,2_right,0,Public
+4,3_left,2,Private
+5,3_right,2,Private
+6,4_left,2,Private
+7,4_right,2,Private
+8,5_left,0,Private
+9,5_right,0,Private

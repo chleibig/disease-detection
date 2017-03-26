@@ -66,3 +66,39 @@ def test_output_jfnet():
     probas_pred = jfmodel.predict(X, JFnet.get_img_dim(width, height))
 
     nt.assert_array_almost_equal(probas, probas_pred)
+
+
+def test_bcnn2_b69aadd():
+    import numpy as np
+
+    from datasets import KaggleDR
+    import models
+
+    det_out = np.array([[0.89167184, 0.10832818],
+                        [0.92720264, 0.07279734],
+                        [0.90044737, 0.09955268],
+                        [0.90154523, 0.09845474],
+                        [0.01999491, 0.98000503],
+                        [0.44038445, 0.55961555],
+                        [0.67832261, 0.32167742],
+                        [0.92573458, 0.07426542],
+                        [0.94570011, 0.05429989],
+                        [0.95900822, 0.04099183]], dtype=np.float32)
+
+    ds = KaggleDR(path_data='tests/ref_data/KDR/sampleTest_JF_BG_512',
+                  filename_targets='tests/ref_data/KDR/sampleLabelsTest.csv',
+                  preprocessing=KaggleDR.standard_normalize)
+    pred_det = np.zeros((ds.n_samples, 2), dtype=np.float32)
+
+    model = models.JFnetMono(p_conv=0.2, last_layer='17',
+                             weights='models/weights_bcnn2_b69aadd.npz')
+
+    idx = 0
+    for X, _ in ds.iterate_minibatches(np.arange(ds.n_samples),
+                                       batch_size=2,
+                                       shuffle=False):
+        n_s = X.shape[0]
+        pred_det[idx:idx + n_s] = model.predict(X)
+        idx += n_s
+
+    nt.assert_array_almost_equal(det_out, pred_det, decimal=4)
