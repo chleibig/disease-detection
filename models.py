@@ -379,9 +379,9 @@ def weights2pickle(name='bcnn1'):
     if 'softin' in name:
         del model.net['logreg']
         outfile += '_softin'
-        assert model.net[-1].key() == 'softmax_input'
+        assert model.net.keys()[-1] == 'softmax_input'
     else:
-        assert model.net[-1].key() == 'logreg'
+        assert model.net.keys()[-1] == 'logreg'
 
     outfile += '.pkl'
     save_model(model, outfile)
