@@ -349,3 +349,40 @@ def save_model(model, filename):
     """Dump model together with weights to pickle file"""
     with open(filename, 'wb') as h:
         pickle.dump(model, h)
+
+
+def weights2pickle(name='bcnn1'):
+    """Convert architecture with weights and dump to pickle file
+
+    Parameters
+    ----------
+    name : str
+        Identifier for one of the models used in
+        http://biorxiv.org/content/early/2016/10/28/084210.
+
+        either of: 'bcnn1', 'bcnn2', 'bcnn1_softin', 'bcnn2_softin'
+
+    """
+
+    assert name in ['bcnn1', 'bcnn2', 'bcnn1_softin', 'bcnn2_softin'], \
+        'Model name is invalid.'
+
+    if 'bcnn1' in name:
+        weights = 'models/weights_bcnn1_392bea6.npz'
+        outfile = 'bcnn1_392bea6'
+    elif 'bcnn2' in name:
+        weights = 'models/weights_bcnn2_b69aadd.npz'
+        outfile = 'bcnn2_b69aadd'
+
+    model = JFnetMono(p_conv=0.2, last_layer='17', weights=weights)
+
+    if 'softin' in name:
+        del model.net['logreg']
+        outfile += '_softin'
+        assert model.net[-1].key() == 'softmax_input'
+    else:
+        assert model.net[-1].key() == 'logreg'
+
+    outfile += '.pkl'
+    save_model(model, outfile)
+    print('Saved model to %s' % outfile)
