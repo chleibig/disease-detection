@@ -81,7 +81,7 @@ CONFIG = {
         [('net', 'Bayesian JFnet'),
          ('dataset', 'Kaggle DR'),
          ('predictions', 'data/processed/'
-          '100_mc_KaggleDR_test_BayesianJFnet17_onset2_b69aadd.pkl'),
+          '100_mc_KaggleDR_test_bcnn2_b69aadd.pkl'),
          ('disease_onset', 2)] +
         DATA['KaggleDR'].items()),
 

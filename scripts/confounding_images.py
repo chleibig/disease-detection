@@ -13,7 +13,7 @@ with open('data/processed/'
           '100_mc_imagenet_val_BayesJFnet17_392bea6.pkl', 'rb') as h:
     pred_imagenet_1 = pickle.load(h)
 with open('data/processed/'
-          '100_mc_KaggleDR_test_BayesianJFnet17_onset2_b69aadd.pkl', 'rb') as h:
+          '100_mc_KaggleDR_test_bcnn2_b69aadd.pkl', 'rb') as h:
     pred_kaggle_2 = pickle.load(h)
 with open('data/processed/'
           '100_mc_imagenet_val_BayesianJFnet17_onset2_b69aadd.pkl', 'rb') as h:
