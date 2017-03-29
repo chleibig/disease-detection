@@ -15,12 +15,14 @@ import statsmodels.nonparametric.api as smnp
 
 from util import roc_curve_plot
 from util import bootstrap
+from util import balance_classes
 
 from matplotlib import rcParams
 rcParams.update({'figure.autolayout': True})
 
 plt.ion()
 sns.set_context('paper', font_scale=2)
+sns.set_style('whitegrid')
 
 A4_WIDTH_SQUARE = (8.27, 8.27)
 A4_WIDTH = 8.27
@@ -136,6 +138,8 @@ def load_predictions(filename):
         pred_test = pickle.load(h)
     probs = pred_test['det_out']
     probs_mc = pred_test['stoch_out']
+    assert ((0.0 <= probs) & (probs <= 1.0 + 1e-6)).all()
+    assert ((0.0 <= probs_mc) & (probs_mc <= 1.0 + 1e-6)).all()
     return probs, probs_mc
 
 
@@ -177,6 +181,7 @@ def mode(data):
 def posterior_statistics(probs_mc_bin):
     predictive_mean = probs_mc_bin.mean(axis=1)
     predictive_std = probs_mc_bin.std(axis=1)
+    assert (0.0 <= predictive_std).all()
     return predictive_mean, predictive_std
 
 
@@ -651,6 +656,99 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
     return {name: fig}
 
 
+def bayes_vs_softmax(y, mu_pred, sigma_pred, softmax,
+                     config, title='', n_levels=300,
+                     balance=False, save=False, format='.png'):
+
+    if balance:
+        y, (mu_pred, sigma_pred, softmax) = balance_classes(y, [mu_pred,
+                                                                sigma_pred,
+                                                                softmax])
+
+    healthy = (y == 0)
+
+    # softmax
+    error = (y != (softmax >= 0.5))
+    fig_soft = plt.figure()
+    plt.suptitle(title)
+
+    plt.subplot(2, 2, 1)
+    plt.title('(a) error')
+    sns.kdeplot(softmax[error], sigma_pred[error], n_levels=n_levels)
+    plt.ylabel('$\sigma_{pred}$')
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 0.25)
+
+    plt.subplot(2, 2, 2)
+    plt.title('(b) correct')
+    sns.kdeplot(softmax[~error], sigma_pred[~error], n_levels=n_levels)
+    plt.ylabel('$\sigma_{pred}$')
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 0.25)
+
+    plt.subplot(2, 2, 3)
+    plt.title('(c) healthy')
+    sns.kdeplot(softmax[healthy], sigma_pred[healthy], n_levels=n_levels)
+    plt.xlabel('p(diseased | image)')
+    plt.ylabel('$\sigma_{pred}$')
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 0.25)
+
+    plt.subplot(2, 2, 4)
+    plt.title('(d) diseased')
+    sns.kdeplot(softmax[~healthy], sigma_pred[~healthy], n_levels=n_levels)
+    plt.xlabel('p(diseased | image)')
+    plt.ylabel('$\sigma_{pred}$')
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 0.25)
+
+    # mu_pred
+    error = (y != (mu_pred >= 0.5))
+    fig_mu = plt.figure()
+    plt.suptitle(title)
+
+    plt.subplot(2, 2, 1)
+    plt.title('(a) error')
+    sns.kdeplot(mu_pred[error], sigma_pred[error], n_levels=n_levels)
+    plt.ylabel('$\sigma_{pred}$')
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 0.25)
+
+    plt.subplot(2, 2, 2)
+    plt.title('(b) correct')
+    sns.kdeplot(mu_pred[~error], sigma_pred[~error], n_levels=n_levels)
+    plt.ylabel('$\sigma_{pred}$')
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 0.25)
+
+    plt.subplot(2, 2, 3)
+    plt.title('(c) healthy')
+    sns.kdeplot(mu_pred[healthy], sigma_pred[healthy], n_levels=n_levels)
+    plt.xlabel('$\mu_{pred}$')
+    plt.ylabel('$\sigma_{pred}$')
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 0.25)
+
+    plt.subplot(2, 2, 4)
+    plt.title('(d) diseased')
+    sns.kdeplot(mu_pred[~healthy], sigma_pred[~healthy], n_levels=n_levels)
+    plt.xlabel('$\mu_{pred}$')
+    plt.ylabel('$\sigma_{pred}$')
+    plt.xlim(0, 1.0)
+    plt.ylim(0, 0.25)
+
+    name_soft = 'sigma_vs_soft_' + config['net'] + '_' + \
+        str(config['disease_onset']) + '_' + config['dataset']
+    name_mu = 'sigma_vs_soft_' + config['net'] + '_' + \
+        str(config['disease_onset']) + '_' + config['dataset']
+
+    if save:
+        fig_soft.savefig(name_soft + format)
+        fig_mu.savefig(name_mu + format)
+
+    return {name_soft: fig_soft, name_mu: fig_mu}
+
+
 def class_conditional_uncertainty(y, uncertainty, disease_onset,
                                   save=False, format='.svg'):
     plt.figure(figsize=map(lambda x: x / 2.0, A4_WIDTH_SQUARE))
@@ -693,7 +791,11 @@ def main():
              y, config, label='$\sigma_{pred}$', save=True, format='.svg')
     figures.append(f)
 
-    # figure 2
+    f = bayes_vs_softmax(y_bin, pred_mean, pred_std, probs_bin,
+                         config, title='', n_levels=250,
+                         balance=False, save=False, format='.png')
+    figures.append(f)
+
     f = acc_rejection_figure(y_bin, pred_mean, uncertainties, config,
                              save=True, format='.pdf')
     figures.append(f)

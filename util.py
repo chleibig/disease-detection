@@ -404,3 +404,38 @@ def bootstrap(data, fun, n_resamples=10000, alpha=0.05):
                 index=idx[int((1-alpha/2.0)*n_resamples)])
 
     return low, high
+
+
+def balance_classes(y, data=None):
+    """Balance classes via undersampling"""
+    assert isinstance(data, list), \
+        'data has to be a list.'
+    assert np.array([len(y) == d.shape[0] for d in data]).all(), \
+        'First dimension of data has to match length of y.'
+
+    classes = set(y)
+    n_classes = len(classes)
+
+    # Get minority class
+    freq = {k: (y == k).sum() / float(len(y)) for k in classes}
+    min_f = float('inf')
+    for k, f in freq.iteritems():
+        if f < min_f:
+            minority_class = k
+    print('Minority class: %d' % minority_class)
+
+    # Balance classes via undersampling
+    n_k = (y == minority_class).sum()
+    print('Taking only %d samples from each class.' % n_k)
+    balanced_data = []
+    for d in data:
+        balanced_d = np.empty(tuple([n_classes * n_k]) + d.shape[1:])
+        for i, k in enumerate(classes):
+            balanced_d[i * n_k:(i + 1) * n_k] = d[y == k][:n_k]
+        balanced_data.append(balanced_d)
+
+    balanced_y = np.empty((n_classes * n_k,))
+    for i, k in enumerate(classes):
+        balanced_y[i * n_k:(i + 1) * n_k] = y[y == k][:n_k]
+
+    return balanced_y, balanced_data
