@@ -351,7 +351,7 @@ def save_model(model, filename):
         pickle.dump(model, h)
 
 
-def weights2pickle(name='bcnn1'):
+def weights2pickle(name='bcnn1', output_layer='logreg'):
     """Convert architecture with weights and dump to pickle file
 
     Parameters
@@ -360,29 +360,32 @@ def weights2pickle(name='bcnn1'):
         Identifier for one of the models used in
         http://biorxiv.org/content/early/2016/10/28/084210.
 
-        either of: 'bcnn1', 'bcnn2', 'bcnn1_softin', 'bcnn2_softin'
+        either of: 'bcnn1', 'bcnn2'
+
+    output_layer: str
+        Ablate layers after this layer. E.g. for extracting
+        penultimate layer features set output_layer='global_pool'
 
     """
 
-    assert name in ['bcnn1', 'bcnn2', 'bcnn1_softin', 'bcnn2_softin'], \
-        'Model name is invalid.'
+    assert name in ['bcnn1', 'bcnn2'], 'Model name is invalid.'
 
     if 'bcnn1' in name:
         weights = 'models/weights_bcnn1_392bea6.npz'
-        outfile = 'bcnn1_392bea6'
+        outfile = 'bcnn1_392bea6_' + output_layer + '.pkl'
     elif 'bcnn2' in name:
         weights = 'models/weights_bcnn2_b69aadd.npz'
-        outfile = 'bcnn2_b69aadd'
+        outfile = 'bcnn2_b69aadd_' + output_layer + '.pkl'
 
     model = JFnetMono(p_conv=0.2, last_layer='17', weights=weights)
 
-    if 'softin' in name:
-        del model.net['logreg']
-        outfile += '_softin'
-        assert model.net.keys()[-1] == 'softmax_input'
-    else:
-        assert model.net.keys()[-1] == 'logreg'
+    assert output_layer in model.net.keys(), \
+        'Invalid output_layer %s' % output_layer
 
-    outfile += '.pkl'
+    while not model.net.keys()[-1] == output_layer:
+        model.net.popitem(last=True)
+
+    assert model.net.keys()[-1] == output_layer
+
     save_model(model, outfile)
     print('Saved model to %s' % outfile)
