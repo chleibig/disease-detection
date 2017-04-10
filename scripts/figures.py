@@ -665,81 +665,53 @@ def bayes_vs_softmax(y, mu_pred, sigma_pred, softmax,
                                                                 sigma_pred,
                                                                 softmax])
 
-    healthy = (y == 0)
-
     # softmax
     error = (y != (softmax >= 0.5))
     fig_soft = plt.figure()
+    sns.despine(fig=fig_soft, offset=10, trim=True)
     plt.suptitle(title)
 
-    plt.subplot(2, 2, 1)
-    plt.title('(a) error')
-    sns.kdeplot(softmax[error], sigma_pred[error], n_levels=n_levels)
-    plt.ylabel('$\sigma_{pred}$')
-    plt.xlim(0, 1.0)
-    plt.ylim(0, 0.25)
-
-    plt.subplot(2, 2, 2)
-    plt.title('(b) correct')
+    plt.subplot(1, 2, 1)
+    plt.title('(a) correct')
     sns.kdeplot(softmax[~error], sigma_pred[~error], n_levels=n_levels)
     plt.ylabel('$\sigma_{pred}$')
+    plt.xlabel('p(diseased | image)')
     plt.xlim(0, 1.0)
     plt.ylim(0, 0.25)
 
-    plt.subplot(2, 2, 3)
-    plt.title('(c) healthy')
-    sns.kdeplot(softmax[healthy], sigma_pred[healthy], n_levels=n_levels)
-    plt.xlabel('p(diseased | image)')
+    plt.subplot(1, 2, 2)
+    plt.title('(b) error')
+    sns.kdeplot(softmax[error], sigma_pred[error], n_levels=n_levels)
     plt.ylabel('$\sigma_{pred}$')
-    plt.xlim(0, 1.0)
-    plt.ylim(0, 0.25)
-
-    plt.subplot(2, 2, 4)
-    plt.title('(d) diseased')
-    sns.kdeplot(softmax[~healthy], sigma_pred[~healthy], n_levels=n_levels)
     plt.xlabel('p(diseased | image)')
-    plt.ylabel('$\sigma_{pred}$')
     plt.xlim(0, 1.0)
     plt.ylim(0, 0.25)
 
     # mu_pred
     error = (y != (mu_pred >= 0.5))
     fig_mu = plt.figure()
+    sns.despine(fig=fig_mu, offset=10, trim=True)
     plt.suptitle(title)
 
-    plt.subplot(2, 2, 1)
-    plt.title('(a) error')
-    sns.kdeplot(mu_pred[error], sigma_pred[error], n_levels=n_levels)
-    plt.ylabel('$\sigma_{pred}$')
-    plt.xlim(0, 1.0)
-    plt.ylim(0, 0.25)
-
-    plt.subplot(2, 2, 2)
-    plt.title('(b) correct')
+    plt.subplot(1, 2, 1)
+    plt.title('(a) correct')
     sns.kdeplot(mu_pred[~error], sigma_pred[~error], n_levels=n_levels)
     plt.ylabel('$\sigma_{pred}$')
+    plt.xlabel('$\mu_{pred}$')
     plt.xlim(0, 1.0)
     plt.ylim(0, 0.25)
 
-    plt.subplot(2, 2, 3)
-    plt.title('(c) healthy')
-    sns.kdeplot(mu_pred[healthy], sigma_pred[healthy], n_levels=n_levels)
-    plt.xlabel('$\mu_{pred}$')
+    plt.subplot(1, 2, 2)
+    plt.title('(b) error')
+    sns.kdeplot(mu_pred[error], sigma_pred[error], n_levels=n_levels)
     plt.ylabel('$\sigma_{pred}$')
-    plt.xlim(0, 1.0)
-    plt.ylim(0, 0.25)
-
-    plt.subplot(2, 2, 4)
-    plt.title('(d) diseased')
-    sns.kdeplot(mu_pred[~healthy], sigma_pred[~healthy], n_levels=n_levels)
     plt.xlabel('$\mu_{pred}$')
-    plt.ylabel('$\sigma_{pred}$')
     plt.xlim(0, 1.0)
     plt.ylim(0, 0.25)
 
     name_soft = 'sigma_vs_soft_' + config['net'] + '_' + \
         str(config['disease_onset']) + '_' + config['dataset']
-    name_mu = 'sigma_vs_soft_' + config['net'] + '_' + \
+    name_mu = 'sigma_vs_mu_' + config['net'] + '_' + \
         str(config['disease_onset']) + '_' + config['dataset']
 
     if save:
