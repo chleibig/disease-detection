@@ -386,22 +386,15 @@ def level_figure():
         if i == 1:
             ax.set_ylabel('')
 
-    # sns.despine(offset=10, trim=True)
-
     return {'level': fig}
 
 
-def label_disagreement_figure(y, uncertainty, config,
-                              save=False, format='.svg', fig=None):
+def label_disagreement_subplot(y, uncertainty, config, ax=None):
     try:
         disagreeing = ~contralateral_agreement(y, config)
     except TypeError:
         print('No data for label disagreement figure available.')
         return
-
-    if fig is None:
-        fig = plt.figure(figsize=(FIGURE_WIDTH / 2.0,
-                                  FIGURE_WIDTH / 2.0))
 
     tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.1)
 
@@ -411,41 +404,42 @@ def label_disagreement_figure(y, uncertainty, config,
                            for accept in accept_idx])
 
     with sns.axes_style('white'):
+        ax.fill_between(tol, p_referred, 0, alpha=0.5,
+                        color=sns.color_palette()[0], label='referred')
+        ax.fill_between(tol, p_retained, 0, alpha=0.5,
+                        color=sns.color_palette()[1], label='retained')
 
-        ax121 = plt.subplot(1, 2, 1)
-        ax122 = plt.subplot(1, 2, 2)
-        ax121.set_title('(a)')
-        ax122.set_title('(b)')
+        ax.set_xlim(min(tol), max(tol))
+        ax.set_ylim(0, 1)
 
-        ax121.fill_between(tol, p_referred, 0, alpha=0.5,
-                           color=sns.color_palette()[0], label='referred')
-        ax121.fill_between(tol, p_retained, 0, alpha=0.5,
-                           color=sns.color_palette()[1], label='retained')
-        ax122.fill_between(frac_retain, p_referred, 0, alpha=0.5,
-                           color=sns.color_palette()[0], label='referred')
-        ax122.fill_between(frac_retain, p_retained, 0, alpha=0.5,
-                           color=sns.color_palette()[1], label='retained')
+        ax.set_xlabel('tolerated model uncertainty')
+        ax.set_ylabel('fraction of data with patient level ambiguity')
+        ax.legend(loc='upper left')
 
-        ax121.set_xlim(min(tol), max(tol))
-        ax122.set_xlim(min(frac_retain), max(frac_retain))
-        ax121.set_ylim(0, 1)
-        ax122.set_ylim(0, 1)
 
-        ax121.set_xlabel('tolerated model uncertainty')
-        ax122.set_xlabel('fraction of retained data')
-        ax121.set_ylabel('fraction of data with patient level ambiguity')
-        ax121.legend()
-        ax122.legend()
+def label_disagreement_figure():
+    keys = ['BCNN_mildDR_Kaggle',
+            'BCNN_moderateDR_Kaggle']
+    titles = ['(a) Disease onset: mild DR',
+              '(b) Disease onset: moderate DR']
+    fig = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_WIDTH / 2.0))
 
-    sns.despine(offset=10, trim=True)
+    for i, k in enumerate(keys):
+        config = CONFIG[k]
+        y = load_labels(config['LABELS_FILE'])
+        probs, probs_mc = load_predictions(config['predictions'])
+        y_bin, _, probs_mc_bin = detection_task(y, probs, probs_mc,
+                                                config['disease_onset'])
+        _, pred_std = posterior_statistics(probs_mc_bin)
 
-    name = 'label_disagreement_' + config['net'] + '_' + \
-           str(config['disease_onset']) + '_' + config['dataset']
+        ax = fig.add_subplot(1, 2, i + 1)
+        label_disagreement_subplot(y_bin, pred_std, config, ax=ax)
+        ax.set_title(titles[i])
+        if i == 1:
+            ax.set_ylabel('')
+        ax.set_ylim(0, 0.2)
 
-    if save:
-        fig.savefig(name + format)
-
-    return {name: fig}
+    return {'label_disagreement': fig}
 
 
 def roc_auc_subplot(y, y_score, uncertainties, config,
@@ -802,21 +796,8 @@ def main():
     f = level_figure()
     figures.append(f)
 
-    # for name, config in CONFIG.iteritems():
-    #     if config['dataset'] == 'Kaggle DR':
-    #         y = load_labels(config['LABELS_FILE'])
-    #         probs, probs_mc = load_predictions(config['predictions'])
-    #         y_bin, probs_bin, probs_mc_bin = detection_task(
-    #             y, probs, probs_mc, config['disease_onset'])
-    #         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
-
-    #         f = level_rejection_figure(y, pred_std, config,
-    #                                    save=False)
-    #         figures.append(f)
-
-    #         f = label_disagreement_figure(y_bin, pred_std, config,
-    #                                       save=False)
-    #         figures.append(f)
+    f = label_disagreement_figure()
+    figures.append(f)
 
     f = train_test_generalization()
     figures.append(f)
