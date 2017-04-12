@@ -316,7 +316,7 @@ class SelectiveSampler(object):
 
 
 def roc_curve_plot(y_true, y_score, pos_label=1,
-                   legend_prefix='', plot_BDA=False, n_bootstrap=10000,
+                   legend_prefix='', recommendation=False, n_bootstrap=10000,
                    color=None):
     """Compute and plot receiver operating characteristic (ROC)
 
@@ -335,10 +335,10 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
         Label considered as positive and others are considered negative.
 
     legend_prefix : string, by default empty
-        plot legend: 'legend_prefix (auc=XX)''
+        plot legend: 'legend_prefix (auc=XX)'
 
-    plot_BDA : boolean, False by default
-        recommendation of British Diabetic Association
+    recommendation : boolean, False by default
+        plot recommendations of British Diabetic Association and NHS
 
     """
     assert y_score.ndim == 1, 'y_score should be of shape (n_samples,)'
@@ -361,19 +361,24 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
                             pos_label=pos_label)
     roc_auc = roc_auc_score(y_true, y_score)
 
+    legend = legend_prefix + ' (auc:%0.3f; CI:%0.3f-%0.3f)' \
+        % (roc_auc, low.value, high.value)
+    print(legend)
+
     plt.plot(fdr, tdr, color=color,
-             label=legend_prefix + ' (auc:%0.3f; CI:%0.3f-%0.3f)'
-             % (roc_auc, low.value, high.value), linewidth=2)
+             label=legend, linewidth=2)
     plt.fill_between(fdr, interpolate_high(fdr), tdr, color=color, alpha=0.3)
     plt.fill_between(fdr, tdr, interpolate_low(fdr), color=color, alpha=0.3)
     plt.plot([0, 1], [0, 1], 'k--')
-    if plot_BDA:
+    if recommendation:
         plt.scatter([0.05], [0.8], color='g', s=50,
-                    label='recommendation British Diabetic Association')
+                    label='recommendation BDA')
+        plt.scatter([0.2], [0.85], color='b', s=50,
+                    label='recommendation NHS')
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.0])
-    plt.xlabel('false diseased rate (1 - specificity)')
-    plt.ylabel('true diseased rate (sensitivity)')
+    plt.xlabel('1 - specificity')
+    plt.ylabel('sensitivity')
     plt.legend(loc="lower right")
 
 

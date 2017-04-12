@@ -21,11 +21,10 @@ from matplotlib import rcParams
 rcParams.update({'figure.autolayout': True})
 
 plt.ion()
-sns.set_context('paper', font_scale=2)
+sns.set_context('paper', font_scale=1.5)
 sns.set_style('whitegrid')
 
-A4_WIDTH_SQUARE = (8.27, 8.27)
-A4_WIDTH = 8.27
+FIGURE_WIDTH = 8.27  # 8.27 inch corresponds to A4
 
 TAG = {0: 'healthy', 1: 'diseased'}
 ONSET_TAG = {1: 'mild DR', 2: 'moderate DR'}
@@ -63,25 +62,25 @@ DATA = {
 }
 
 CONFIG = {
-    'BayesJF17_mildDR_Kaggle_train': dict(
-        [('net', 'Bayesian JFnet'),
-         ('dataset', 'Kaggle DR train'),
+    'BCNN_mildDR_Kaggle_train': dict(
+        [('net', 'BCNN'),
+         ('dataset', 'Kaggle train'),
          ('predictions', 'data/processed/'
           '100_mc_KaggleDR_train_BayesJFnet17_392bea6.pkl'),
          ('disease_onset', 1)] +
         DATA['KaggleDR_train'].items()),
 
-    'BayesJF17_mildDR_Kaggle': dict(
-        [('net', 'Bayesian JFnet'),
-         ('dataset', 'Kaggle DR'),
+    'BCNN_mildDR_Kaggle': dict(
+        [('net', 'BCNN'),
+         ('dataset', 'Kaggle'),
          ('predictions', 'data/processed/'
           '100_mc_KaggleDR_test_BayesJFnet17_392bea6.pkl'),
          ('disease_onset', 1)] +
         DATA['KaggleDR'].items()),
 
-    'BayesJF17_moderateDR_Kaggle': dict(
-        [('net', 'Bayesian JFnet'),
-         ('dataset', 'Kaggle DR'),
+    'BCNN_moderateDR_Kaggle': dict(
+        [('net', 'BCNN'),
+         ('dataset', 'Kaggle'),
          ('predictions', 'data/processed/'
           '100_mc_KaggleDR_test_bcnn2_b69aadd.pkl'),
          ('disease_onset', 2)] +
@@ -89,7 +88,7 @@ CONFIG = {
 
     'JFnet_mildDR_Kaggle': dict(
         [('net', 'JFnet'),
-         ('dataset', 'Kaggle DR'),
+         ('dataset', 'Kaggle'),
          ('predictions', 'data/processed/'
           'c9ade47_100_mc_KaggleDR_test_JFnet.pkl'),
          ('disease_onset', 1)] +
@@ -97,22 +96,22 @@ CONFIG = {
 
     'JFnet_moderateDR_Kaggle': dict(
         [('net', 'JFnet'),
-         ('dataset', 'Kaggle DR'),
+         ('dataset', 'Kaggle'),
          ('predictions', 'data/processed/'
           'c9ade47_100_mc_KaggleDR_test_JFnet.pkl'),
          ('disease_onset', 2)] +
         DATA['KaggleDR'].items()),
 
-    'BayesJF17_mildDR_Messidor': dict(
-        [('net', 'Bayesian JFnet'),
+    'BCNN_mildDR_Messidor': dict(
+        [('net', 'BCNN'),
          ('dataset', 'Messidor'),
          ('predictions', 'data/processed/'
           '100_mc_Messidor_BayesJFnet17_392bea6.pkl'),
          ('disease_onset', 1)] +
         DATA['Messidor'].items()),
 
-    'BayesJF17_moderateDR_Messidor': dict(
-        [('net', 'Bayesian JFnet'),
+    'BCNN_moderateDR_Messidor': dict(
+        [('net', 'BCNN'),
          ('dataset', 'Messidor'),
          ('predictions', 'data/processed/'
           '100_mc_Messidor_BayesianJFnet17_onset2_b69aadd.pkl'),
@@ -279,8 +278,8 @@ def sample_rejection(uncertainty, min_percentile):
 def acc_rejection_figure(y, y_score, uncertainties, config,
                          save=False, format='.svg', fig=None):
     if fig is None:
-        fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
-                                  A4_WIDTH_SQUARE[0] / 2.0))
+        fig = plt.figure(figsize=(FIGURE_WIDTH,
+                                  FIGURE_WIDTH / 2.0))
 
     colors = sns.color_palette()
 
@@ -311,11 +310,12 @@ def acc_rejection_figure(y, y_score, uncertainties, config,
 
     ax121.set_ylim(min_acc, 1)
     ax122.set_ylim(min_acc, 1)
+    ax122.set_xlim(0.1, 1.0)
     ax121.set_xlabel('tolerated model uncertainty')
     ax121.set_ylabel('accuracy')
     ax121.legend(loc='best')
 
-    ax122.plot(frac_retain, acc_rand['value'], label='randomly rejected',
+    ax122.plot(frac_retain, acc_rand['value'], label='random referral',
                color=colors[i+1], linewidth=2)
     ax122.fill_between(frac_retain, acc_rand['value'], acc_rand['low'],
                        color=colors[i+1], alpha=0.3)
@@ -323,6 +323,8 @@ def acc_rejection_figure(y, y_score, uncertainties, config,
                        color=colors[i+1], alpha=0.3)
     ax122.set_xlabel('fraction of retained data')
     ax122.legend(loc='best')
+
+    sns.despine(offset=10, trim=True)
 
     name = 'acc_' + config['net'] + '_' + str(config['disease_onset']) + \
            '_' + config['dataset']
@@ -336,8 +338,8 @@ def acc_rejection_figure(y, y_score, uncertainties, config,
 def level_rejection_figure(y_level, uncertainty, config,
                            save=False, format='.svg', fig=None):
     if fig is None:
-        fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
-                                  A4_WIDTH_SQUARE[0] / 2.0))
+        fig = plt.figure(figsize=(FIGURE_WIDTH / 2.0,
+                                  FIGURE_WIDTH / 2.0))
 
     tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.0)
     LEVEL = config['LEVEL']
@@ -381,6 +383,8 @@ def level_rejection_figure(y_level, uncertainty, config,
         ax122.set_xlabel('fraction of retained data')
         ax122.legend(loc='lower center')
 
+    sns.despine(offset=10, trim=True)
+
     name = 'level_' + config['net'] + '_' + str(config['disease_onset']) + \
            '_' + config['dataset']
 
@@ -399,8 +403,8 @@ def label_disagreement_figure(y, uncertainty, config,
         return
 
     if fig is None:
-        fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
-                                  A4_WIDTH_SQUARE[0] / 2.0))
+        fig = plt.figure(figsize=(FIGURE_WIDTH / 2.0,
+                                  FIGURE_WIDTH / 2.0))
 
     tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.1)
 
@@ -436,6 +440,8 @@ def label_disagreement_figure(y, uncertainty, config,
         ax121.legend()
         ax122.legend()
 
+    sns.despine(offset=10, trim=True)
+
     name = 'label_disagreement_' + config['net'] + '_' + \
            str(config['disease_onset']) + '_' + config['dataset']
 
@@ -445,21 +451,21 @@ def label_disagreement_figure(y, uncertainty, config,
     return {name: fig}
 
 
-def roc_auc_rejection_figure(y, y_score, uncertainties, config,
-                             save=False, format='.svg', fig=None):
-    if fig is None:
-        fig = plt.figure(figsize=(A4_WIDTH_SQUARE[0],
-                                  A4_WIDTH_SQUARE[0] / 2.0))
+def roc_auc_subplot(y, y_score, uncertainties, config,
+                    save=False, format='.svg',
+                    ax121=None, ax122=None):
+    if ax121 is None or ax122 is None:
+        fig = plt.figure(figsize=(FIGURE_WIDTH,
+                                  FIGURE_WIDTH / 2.0))
+        ax121 = plt.subplot2grid((1, 2), (0, 0))
+        ax122 = plt.subplot2grid((1, 2), (0, 1))
 
     colors = sns.color_palette()
 
-    ax121 = plt.subplot2grid((1, 2), (0, 0))
-    ax122 = plt.subplot2grid((1, 2), (0, 1))
-
-    ax121.set_title('(a) %s(disease onset: %s); %s'
+    ax121.set_title('(a) %s(onset: %s); %s'
                     % (config['net'], ONSET_TAG[config['disease_onset']],
                        config['dataset']))
-    ax122.set_title('(b) %s(disease onset: %s); %s'
+    ax122.set_title('(b) %s(onset: %s); %s'
                     % (config['net'], ONSET_TAG[config['disease_onset']],
                        config['dataset']))
 
@@ -485,23 +491,25 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, config,
                            y_score[v <= thr],
                            color=colors[j+1],
                            legend_prefix='%d%% data retained, %s' % (f * 100,
-                                                                     k))
+                                                                     k),
+                           n_bootstrap=config['n_bootstrap'])
 
     ax121.plot(frac_retain, auc_rand['value'],
-               label='randomly rejected', color=colors[i+1], linewidth=2)
+               label='random referral', color=colors[i+1], linewidth=2)
     ax121.fill_between(frac_retain, auc_rand['value'], auc_rand['low'],
                        color=colors[i+1], alpha=0.3)
     ax121.fill_between(frac_retain, auc_rand['high'], auc_rand['value'],
                        color=colors[i+1], alpha=0.3)
     ax121.set_xlim(config['min_percentile']/100., 1.0)
-    ax121.set_xlabel('fraction of retained data')
-    ax121.set_ylabel('roc_auc')
+    ax121.set_xlabel('retained data')
+    ax121.set_ylabel('auc')
     ax121.legend(loc='best')
 
     ax122
     roc_curve_plot(y, y_score, color=colors[0],
-                   legend_prefix='without rejection',
-                   plot_BDA=True)
+                   legend_prefix='no referral',
+                   recommendation=True,
+                   n_bootstrap=config['n_bootstrap'])
 
     x0, x1 = ax121.get_xlim()
     y0, y1 = ax121.get_ylim()
@@ -510,28 +518,62 @@ def roc_auc_rejection_figure(y, y_score, uncertainties, config,
     y0, y1 = ax122.get_ylim()
     ax122.set_aspect((x1 - x0)/(y1 - y0))
 
+    if save and fig is not None:
+        name = 'roc_' + config['net'] + '_' + str(config['disease_onset']) + \
+               '_' + config['dataset']
+        fig.savefig(name + format)
+        return {name: fig}
+
+
+def roc_auc_figure():
+    keys = ['BCNN_mildDR_Kaggle',
+            'BCNN_moderateDR_Kaggle',
+            'JFnet_mildDR_Kaggle',
+            'JFnet_moderateDR_Kaggle',
+            'BCNN_mildDR_Messidor',
+            'BCNN_moderateDR_Messidor']
+    titles = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']
+    fig = plt.figure()
+    for i, k in enumerate(keys):
+        config = CONFIG[k]
+        print('Working on %s...' % k)
+        y = load_labels(config['LABELS_FILE'])
+        probs, probs_mc = load_predictions(config['predictions'])
+        y_bin, probs_bin, probs_mc_bin = detection_task(
+            y, probs, probs_mc, config['disease_onset'])
+        pred_mean, pred_std = posterior_statistics(probs_mc_bin)
+        uncertainties = {'$\sigma_{pred}$': pred_std}
+
+        ax121 = plt.subplot(3, 4, 2 * i + 1)
+        ax122 = plt.subplot(3, 4, 2 * i + 2)
+        roc_auc_subplot(y_bin, pred_mean,
+                        uncertainties, config,
+                        save=False,
+                        ax121=ax121,
+                        ax122=ax122)
+        ax121.set_title('')
+        ax121.set_title(titles[i], loc='left')
+        ax121.get_legend().remove()
+        ax122.set_title('')
+        ax122.get_legend().remove()
+
+    sns.despine(offset=10)
     plt.tight_layout()
 
-    name = 'roc_' + config['net'] + '_' + str(config['disease_onset']) + \
-           '_' + config['dataset']
-
-    if save:
-        fig.savefig(name + format)
-
-    return {name: fig}
+    return {'roc_auc': fig}
 
 
 def train_test_generalization():
     """Visualizes performance over uncertainty for both train and test data"""
-    fig = plt.figure(figsize=(A4_WIDTH / 2.0,
-                              A4_WIDTH / 2.0))
+    fig = plt.figure(figsize=(FIGURE_WIDTH / 2.0,
+                              FIGURE_WIDTH / 2.0))
     ax = fig.gca()
     colors = sns.color_palette()
 
     configs = {'$\sigma_{pred} (train)$':
-               CONFIG['BayesJF17_mildDR_Kaggle_train'],
+               CONFIG['BCNN_mildDR_Kaggle_train'],
                '$\sigma_{pred} (test)$':
-               CONFIG['BayesJF17_mildDR_Kaggle']}
+               CONFIG['BCNN_mildDR_Kaggle']}
 
     for i, (k, config) in enumerate(configs.iteritems()):
         y = load_labels(config['LABELS_FILE'])
@@ -556,6 +598,8 @@ def train_test_generalization():
     ax.set_ylabel('roc_auc')
     ax.legend(loc='best')
 
+    sns.despine(offset=10, trim=True)
+
     name = 'train_test_' + config['net'] + '_' + \
            str(config['disease_onset']) + '_' + config['dataset']
 
@@ -568,7 +612,7 @@ def error_conditional_uncertainty(y, y_score, uncertainty, disease_onset,
                                   label='pred_std', ax=None):
     """Plot conditional pdfs for correct and erroneous argmax predictions"""
     if ax is None:
-        ax = plt.figure(figsize=A4_WIDTH_SQUARE).gca()
+        ax = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_WIDTH)).gca()
 
     y_pred = argmax_labels(y_score)
     corr = (y_pred == y)
@@ -597,7 +641,8 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
     uncertain = len(y) - 1
     middle_certain = np.where(uncertainty[asc] > 0.14)[0][0]
     examples = [certain, middle_certain, uncertain]
-    fig = plt.figure(figsize=A4_WIDTH_SQUARE)
+    fig = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_WIDTH))
+
     for idx, i in enumerate(examples):
         im = mpimg.imread(os.path.join(image_path, images[asc][i] + '.jpeg'))
 
@@ -624,7 +669,7 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
                       % uncertainty[asc][i],
                       '"uncertain":\n $\sigma_{pred}$ = %.2f'
                       % uncertainty[asc][i]][idx],
-                     (0.33, 0.6 * y_pos))
+                     (0.2, 0.75 * y_pos))
         length = 0.5 * max(uncertainty[asc][i], 0.02)
         arrow_params = {'length_includes_head': True,
                         'width': 0.005 * y_pos,
@@ -647,6 +692,8 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
                                   config['disease_onset'],
                                   label=label, ax=ax)
 
+    sns.despine(offset=10, trim=True)
+
     name = 'fig1_' + config['net'] + '_' + str(config['disease_onset']) + \
            '_' + config['dataset']
 
@@ -667,8 +714,8 @@ def bayes_vs_softmax(y, mu_pred, sigma_pred, softmax,
 
     # softmax
     error = (y != (softmax >= 0.5))
-    fig_soft = plt.figure()
-    sns.despine(fig=fig_soft, offset=10, trim=True)
+    fig_soft = plt.figure(figsize=(FIGURE_WIDTH,
+                                   FIGURE_WIDTH / 2.0))
     plt.suptitle(title)
 
     plt.subplot(1, 2, 1)
@@ -687,43 +734,20 @@ def bayes_vs_softmax(y, mu_pred, sigma_pred, softmax,
     plt.xlim(0, 1.0)
     plt.ylim(0, 0.25)
 
-    # mu_pred
-    error = (y != (mu_pred >= 0.5))
-    fig_mu = plt.figure()
-    sns.despine(fig=fig_mu, offset=10, trim=True)
-    plt.suptitle(title)
-
-    plt.subplot(1, 2, 1)
-    plt.title('(a) correct')
-    sns.kdeplot(mu_pred[~error], sigma_pred[~error], n_levels=n_levels)
-    plt.ylabel('$\sigma_{pred}$')
-    plt.xlabel('$\mu_{pred}$')
-    plt.xlim(0, 1.0)
-    plt.ylim(0, 0.25)
-
-    plt.subplot(1, 2, 2)
-    plt.title('(b) error')
-    sns.kdeplot(mu_pred[error], sigma_pred[error], n_levels=n_levels)
-    plt.ylabel('$\sigma_{pred}$')
-    plt.xlabel('$\mu_{pred}$')
-    plt.xlim(0, 1.0)
-    plt.ylim(0, 0.25)
+    sns.despine(offset=10, trim=True)
 
     name_soft = 'sigma_vs_soft_' + config['net'] + '_' + \
-        str(config['disease_onset']) + '_' + config['dataset']
-    name_mu = 'sigma_vs_mu_' + config['net'] + '_' + \
         str(config['disease_onset']) + '_' + config['dataset']
 
     if save:
         fig_soft.savefig(name_soft + format)
-        fig_mu.savefig(name_mu + format)
 
-    return {name_soft: fig_soft, name_mu: fig_mu}
+    return {name_soft: fig_soft}
 
 
 def class_conditional_uncertainty(y, uncertainty, disease_onset,
                                   save=False, format='.svg'):
-    plt.figure(figsize=map(lambda x: x / 2.0, A4_WIDTH_SQUARE))
+    plt.figure(figsize=(FIGURE_WIDTH / 2.0, FIGURE_WIDTH / 2.0))
     plt.title('Disease onset: {}'.format(disease_onset))
     HEALTHY, DISEASED = 0, 1
 
@@ -749,7 +773,7 @@ def main():
 
     figures = []
 
-    config = CONFIG['BayesJF17_mildDR_Kaggle']
+    config = CONFIG['BCNN_mildDR_Kaggle']
 
     y = load_labels(config['LABELS_FILE'])
     images = load_filenames(config['LABELS_FILE'])
@@ -772,25 +796,20 @@ def main():
                              save=True, format='.pdf')
     figures.append(f)
 
-    # ROC figures for comparison of different architectures, tasks
+    # ROC figure for comparison of different architectures, tasks
     # and true generalization performance
 
+    f = roc_auc_figure()
+    figures.append(f)
+
     for name, config in CONFIG.iteritems():
-        print('Working on %s...' % name)
-
-        y = load_labels(config['LABELS_FILE'])
-        probs, probs_mc = load_predictions(config['predictions'])
-        y_bin, probs_bin, probs_mc_bin = detection_task(
-            y, probs, probs_mc, config['disease_onset'])
-        pred_mean, pred_std = posterior_statistics(probs_mc_bin)
-        uncertainties = {'$\sigma_{pred}$': pred_std}
-
-        f = roc_auc_rejection_figure(y_bin, pred_mean,
-                                     uncertainties, config,
-                                     save=False)
-        figures.append(f)
-
         if config['dataset'] == 'Kaggle DR':
+            y = load_labels(config['LABELS_FILE'])
+            probs, probs_mc = load_predictions(config['predictions'])
+            y_bin, probs_bin, probs_mc_bin = detection_task(
+                y, probs, probs_mc, config['disease_onset'])
+            pred_mean, pred_std = posterior_statistics(probs_mc_bin)
+
             f = level_rejection_figure(y, pred_std, config,
                                        save=False)
             figures.append(f)
