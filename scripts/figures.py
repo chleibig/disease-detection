@@ -340,8 +340,7 @@ def acc_rejection_figure(y, y_score, uncertainties, config,
 
 def level_subplot(y_level, uncertainty, config,
                   ax=None):
-    tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0,
-        maximum=np.percentile(uncertainty, 99.99)) # cut off ends with few samples
+    tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0)
     LEVEL = config['LEVEL']
     p = {level: np.array([rel_freq(y_level[~accept], level)
                           for accept in accept_idx])
@@ -399,8 +398,7 @@ def label_disagreement_subplot(y, uncertainty, config, ax=None):
         print('No data for label disagreement figure available.')
         return
 
-    tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.1,
-        maximum=np.percentile(uncertainty, 99.99))  # cut of ends with few samples
+    tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.1)
 
     p_referred = np.array([sum((~accept) & (disagreeing))/float(sum(~accept))
                            for accept in accept_idx])
