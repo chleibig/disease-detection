@@ -261,9 +261,12 @@ def performance_over_uncertainty_tol(uncertainty, y, probs, measure,
     return uncertainty_tol, frac_retain, p, p_rand
 
 
-def sample_rejection(uncertainty, min_percentile):
+def sample_rejection(uncertainty, min_percentile,
+                     maximum=None):
+    if maximum is None:
+        maximum = uncertainty.max()
     uncertainty_tol = np.linspace(np.percentile(uncertainty, min_percentile),
-                                  uncertainty.max(), 100)
+                                  maximum, 100)
     frac_retain = np.zeros_like(uncertainty_tol)
     n_samples = len(uncertainty)
     accept_indices = []
@@ -337,8 +340,8 @@ def acc_rejection_figure(y, y_score, uncertainties, config,
 
 def level_subplot(y_level, uncertainty, config,
                   ax=None):
-
-    tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.0)
+    tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0,
+        maximum=np.percentile(uncertainty, 99.99)) # cut off ends with few samples
     LEVEL = config['LEVEL']
     p = {level: np.array([rel_freq(y_level[~accept], level)
                           for accept in accept_idx])
@@ -356,7 +359,7 @@ def level_subplot(y_level, uncertainty, config,
                             label='%d: %s' % (level, LEVEL[level]))
             if (level + 1) == config['disease_onset']:
                 ax.plot(tol, p[level] + cum,
-                        color='k', label='decision boundary')
+                        color='k', label='healthy/diseased boundary')
             cum += p[level]
 
         ax.set_xlim(min(tol), max(tol))
@@ -364,7 +367,7 @@ def level_subplot(y_level, uncertainty, config,
 
         ax.set_xlabel('tolerated model uncertainty')
         ax.set_ylabel('relative proportions within referred dataset')
-        ax.legend(loc='lower center')
+        ax.legend(loc='lower left')
 
 
 def level_figure():
@@ -396,7 +399,8 @@ def label_disagreement_subplot(y, uncertainty, config, ax=None):
         print('No data for label disagreement figure available.')
         return
 
-    tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.1)
+    tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.1,
+        maximum=np.percentile(uncertainty, 99.99))  # cut of ends with few samples
 
     p_referred = np.array([sum((~accept) & (disagreeing))/float(sum(~accept))
                            for accept in accept_idx])
