@@ -335,11 +335,8 @@ def acc_rejection_figure(y, y_score, uncertainties, config,
     return {name: fig}
 
 
-def level_rejection_figure(y_level, uncertainty, config,
-                           save=False, format='.svg', fig=None):
-    if fig is None:
-        fig = plt.figure(figsize=(FIGURE_WIDTH / 2.0,
-                                  FIGURE_WIDTH / 2.0))
+def level_subplot(y_level, uncertainty, config,
+                  ax=None):
 
     tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.0)
     LEVEL = config['LEVEL']
@@ -349,49 +346,49 @@ def level_rejection_figure(y_level, uncertainty, config,
     cum = np.zeros_like(tol)
 
     with sns.axes_style('white'):
-
-        ax121 = plt.subplot(1, 2, 1)
-        ax122 = plt.subplot(1, 2, 2)
-        ax121.set_title('(a) Disease onset: %s'
-                        % ONSET_TAG[config['disease_onset']])
-        ax122.set_title('(b) Disease onset: %s'
-                        % ONSET_TAG[config['disease_onset']])
+        ax.set_title('Disease onset: %s'
+                     % ONSET_TAG[config['disease_onset']])
 
         colors = {level: sns.color_palette("Blues")[level] for level in LEVEL}
         for level in LEVEL:
-            ax121.fill_between(tol, p[level] + cum, cum,
-                               color=colors[level],
-                               label='%d: %s' % (level, LEVEL[level]))
-            ax122.fill_between(frac_retain, p[level] + cum, cum,
-                               color=colors[level],
-                               label='%d: %s' % (level, LEVEL[level]))
+            ax.fill_between(tol, p[level] + cum, cum,
+                            color=colors[level],
+                            label='%d: %s' % (level, LEVEL[level]))
             if (level + 1) == config['disease_onset']:
-                ax121.plot(tol, p[level] + cum,
-                           color='k', label='decision boundary')
-                ax122.plot(frac_retain, p[level] + cum,
-                           color='k', label='decision boundary')
+                ax.plot(tol, p[level] + cum,
+                        color='k', label='decision boundary')
             cum += p[level]
 
-        ax121.set_xlim(min(tol), max(tol))
-        ax122.set_xlim(min(frac_retain), max(frac_retain))
-        ax121.set_ylim(0, 1)
-        ax122.set_ylim(0, 1)
+        ax.set_xlim(min(tol), max(tol))
+        ax.set_ylim(0, 1)
 
-        ax121.set_xlabel('tolerated model uncertainty')
-        ax121.set_ylabel('relative proportions within referred dataset')
-        ax121.legend(loc='lower center')
-        ax122.set_xlabel('fraction of retained data')
-        ax122.legend(loc='lower center')
+        ax.set_xlabel('tolerated model uncertainty')
+        ax.set_ylabel('relative proportions within referred dataset')
+        ax.legend(loc='lower center')
 
-    sns.despine(offset=10, trim=True)
 
-    name = 'level_' + config['net'] + '_' + str(config['disease_onset']) + \
-           '_' + config['dataset']
+def level_figure():
+    keys = ['BCNN_mildDR_Kaggle',
+            'BCNN_moderateDR_Kaggle']
+    title_prefix = ['(a)', '(b)']
+    fig = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_WIDTH / 2.0))
+    for i, k in enumerate(keys):
+        config = CONFIG[k]
+        y = load_labels(config['LABELS_FILE'])
+        probs, probs_mc = load_predictions(config['predictions'])
+        _, _, probs_mc_bin = detection_task(y, probs, probs_mc,
+                                            config['disease_onset'])
+        _, pred_std = posterior_statistics(probs_mc_bin)
 
-    if save:
-        fig.savefig(name + format)
+        ax = fig.add_subplot(1, 2, i + 1)
+        level_subplot(y, pred_std, config, ax=ax)
+        ax.set_title(title_prefix[i] + ' ' + ax.get_title())
+        if i == 1:
+            ax.set_ylabel('')
 
-    return {name: fig}
+    # sns.despine(offset=10, trim=True)
+
+    return {'level': fig}
 
 
 def label_disagreement_figure(y, uncertainty, config,
@@ -802,21 +799,24 @@ def main():
     f = roc_auc_figure()
     figures.append(f)
 
-    for name, config in CONFIG.iteritems():
-        if config['dataset'] == 'Kaggle DR':
-            y = load_labels(config['LABELS_FILE'])
-            probs, probs_mc = load_predictions(config['predictions'])
-            y_bin, probs_bin, probs_mc_bin = detection_task(
-                y, probs, probs_mc, config['disease_onset'])
-            pred_mean, pred_std = posterior_statistics(probs_mc_bin)
+    f = level_figure()
+    figures.append(f)
 
-            f = level_rejection_figure(y, pred_std, config,
-                                       save=False)
-            figures.append(f)
+    # for name, config in CONFIG.iteritems():
+    #     if config['dataset'] == 'Kaggle DR':
+    #         y = load_labels(config['LABELS_FILE'])
+    #         probs, probs_mc = load_predictions(config['predictions'])
+    #         y_bin, probs_bin, probs_mc_bin = detection_task(
+    #             y, probs, probs_mc, config['disease_onset'])
+    #         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
 
-            f = label_disagreement_figure(y_bin, pred_std, config,
-                                          save=False)
-            figures.append(f)
+    #         f = level_rejection_figure(y, pred_std, config,
+    #                                    save=False)
+    #         figures.append(f)
+
+    #         f = label_disagreement_figure(y_bin, pred_std, config,
+    #                                       save=False)
+    #         figures.append(f)
 
     f = train_test_generalization()
     figures.append(f)
