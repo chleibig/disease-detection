@@ -115,7 +115,7 @@ def uncertainty_plot(config):
     sns.kdeplot(std_kaggle_out, shade=True, cut=3, label='Kaggle')
     sns.kdeplot(std_messidor_out, shade=True, cut=3, label='Messidor')
     sns.kdeplot(std_imagenet_out, shade=True, cut=3, label='Imagenet')
-    plt.xlabel('uncertainty ($\sigma_{pred}$)')
+    plt.xlabel('uncertainty [$\sigma_{pred}$]')
     plt.ylabel('density [a.u.]')
     plt.xlim(0)
     plt.legend(loc='best')
@@ -132,28 +132,28 @@ def anomaly_plot(config):
                 shade=True, cut=3, label='Messidor')
     sns.kdeplot(squared_reconstruction_error(ae, X_imagenet),
                 shade=True, cut=3, label='Imagenet')
-    plt.xlabel('$\overline{(x - x_{reconstructed})^2}$')
+    plt.xlabel('anomaly score [$\overline{(x - x_{reconstructed})^2}$]')
     plt.ylabel('density [a.u.]')
     plt.xlim(0)
     plt.ylim(0, 1500)
-    plt.xlim(0, 0.01)
+    plt.xlim(0, 0.003)
 
 
 def figure():
     ax221 = plt.subplot(221)
-    ax221.set_title('(a) task 1', loc='left')
+    ax221.set_title('(a) Disease onset: mild DR', loc='left')
     uncertainty_plot(configs[1])
 
     ax222 = plt.subplot(222)
-    ax222.set_title('(b) task 2', loc='left')
+    ax222.set_title('(b) Disease onset: moderate DR', loc='left')
     uncertainty_plot(configs[2])
 
     ax223 = plt.subplot(223)
-    ax223.set_title('(c) task 1', loc='left')
+    ax223.set_title('(c) Disease onset: mild DR', loc='left')
     anomaly_plot(configs[1])
 
     ax224 = plt.subplot(224)
-    ax224.set_title('(d) task 2', loc='left')
+    ax224.set_title('(d) Disease onset: moderate DR', loc='left')
     anomaly_plot(configs[2])
 
 
