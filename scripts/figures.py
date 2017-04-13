@@ -519,9 +519,11 @@ def roc_auc_subplot(y, y_score, uncertainties, config,
 
 
 def roc_auc_figure():
-    keys = ['JFnet_mildDR_Kaggle',
-            'JFnet_moderateDR_Kaggle']
-    titles = ['(a)', '(b)']
+    keys = ['BCNN_mildDR_Kaggle',
+            'BCNN_moderateDR_Kaggle',
+            'BCNN_mildDR_Messidor',
+            'BCNN_moderateDR_Messidor']
+    titles = ['(a)', '(b)', '(c)', '(d)']
     fig = plt.figure()
     for i, k in enumerate(keys):
         config = CONFIG[k]
@@ -533,8 +535,8 @@ def roc_auc_figure():
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
         uncertainties = {'$\sigma_{pred}$': pred_std}
 
-        ax121 = plt.subplot(1, 4, 2 * i + 1)
-        ax122 = plt.subplot(1, 4, 2 * i + 2)
+        ax121 = plt.subplot(2, 4, 2 * i + 1)
+        ax122 = plt.subplot(2, 4, 2 * i + 2)
         roc_auc_subplot(y_bin, pred_mean,
                         uncertainties, config,
                         save=False,
