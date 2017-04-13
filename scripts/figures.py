@@ -521,11 +521,9 @@ def roc_auc_subplot(y, y_score, uncertainties, config,
 def roc_auc_figure():
     keys = ['BCNN_mildDR_Kaggle',
             'BCNN_moderateDR_Kaggle',
-            'JFnet_mildDR_Kaggle',
-            'JFnet_moderateDR_Kaggle',
             'BCNN_mildDR_Messidor',
             'BCNN_moderateDR_Messidor']
-    titles = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']
+    titles = ['(a)', '(b)', '(c)', '(d)']
     fig = plt.figure()
     for i, k in enumerate(keys):
         config = CONFIG[k]
@@ -537,8 +535,8 @@ def roc_auc_figure():
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
         uncertainties = {'$\sigma_{pred}$': pred_std}
 
-        ax121 = plt.subplot(3, 4, 2 * i + 1)
-        ax122 = plt.subplot(3, 4, 2 * i + 2)
+        ax121 = plt.subplot(2, 4, 2 * i + 1)
+        ax122 = plt.subplot(2, 4, 2 * i + 2)
         roc_auc_subplot(y_bin, pred_mean,
                         uncertainties, config,
                         save=False,
@@ -549,6 +547,8 @@ def roc_auc_figure():
         ax121.get_legend().remove()
         ax122.set_title('')
         ax122.get_legend().remove()
+        ax122.set_xlim(0.0, 0.5)
+        ax122.set_ylim(0.5, 1.0)
 
     sns.despine(offset=10)
     plt.tight_layout()
@@ -766,28 +766,28 @@ def main():
 
     figures = []
 
-    config = CONFIG['BCNN_mildDR_Kaggle']
+    # config = CONFIG['BCNN_mildDR_Kaggle']
 
-    y = load_labels(config['LABELS_FILE'])
-    images = load_filenames(config['LABELS_FILE'])
-    probs, probs_mc = load_predictions(config['predictions'])
-    y_bin, probs_bin, probs_mc_bin = detection_task(
-        y, probs, probs_mc, config['disease_onset'])
-    pred_mean, pred_std = posterior_statistics(probs_mc_bin)
-    uncertainties = {'$\sigma_{pred}$': pred_std}
+    # y = load_labels(config['LABELS_FILE'])
+    # images = load_filenames(config['LABELS_FILE'])
+    # probs, probs_mc = load_predictions(config['predictions'])
+    # y_bin, probs_bin, probs_mc_bin = detection_task(
+    #     y, probs, probs_mc, config['disease_onset'])
+    # pred_mean, pred_std = posterior_statistics(probs_mc_bin)
+    # uncertainties = {'$\sigma_{pred}$': pred_std}
 
-    f = fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin,
-             y, config, label='$\sigma_{pred}$', save=True, format='.svg')
-    figures.append(f)
+    # f = fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin,
+    #          y, config, label='$\sigma_{pred}$', save=True, format='.svg')
+    # figures.append(f)
 
-    f = bayes_vs_softmax(y_bin, pred_mean, pred_std, probs_bin,
-                         config, title='', n_levels=250,
-                         balance=False, save=False, format='.png')
-    figures.append(f)
+    # f = bayes_vs_softmax(y_bin, pred_mean, pred_std, probs_bin,
+    #                      config, title='', n_levels=250,
+    #                      balance=False, save=False, format='.png')
+    # figures.append(f)
 
-    f = acc_rejection_figure(y_bin, pred_mean, uncertainties, config,
-                             save=True, format='.pdf')
-    figures.append(f)
+    # f = acc_rejection_figure(y_bin, pred_mean, uncertainties, config,
+    #                          save=True, format='.pdf')
+    # figures.append(f)
 
     # ROC figure for comparison of different architectures, tasks
     # and true generalization performance
@@ -795,14 +795,14 @@ def main():
     f = roc_auc_figure()
     figures.append(f)
 
-    f = level_figure()
-    figures.append(f)
+    # f = level_figure()
+    # figures.append(f)
 
-    f = label_disagreement_figure()
-    figures.append(f)
+    # f = label_disagreement_figure()
+    # figures.append(f)
 
-    f = train_test_generalization()
-    figures.append(f)
+    # f = train_test_generalization()
+    # figures.append(f)
 
     return figures
 
