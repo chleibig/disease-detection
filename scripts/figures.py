@@ -697,7 +697,8 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
 
 
 def prediction_vs_uncertainty(y, uncertainty, prediction,
-                              title='', n_levels=250, balance=False):
+                              title='', n_levels=250, balance=False,
+                              ax121=None, ax122=None):
     ylabel = uncertainty.keys()[0]
     uncertainty = uncertainty.values()[0]
     xlabel = prediction.keys()[0]
@@ -711,21 +712,27 @@ def prediction_vs_uncertainty(y, uncertainty, prediction,
 
     plt.suptitle(title)
 
-    plt.subplot(1, 2, 1)
-    plt.title('(a) correct')
-    sns.kdeplot(prediction[~error], uncertainty[~error], n_levels=n_levels)
-    plt.ylabel(ylabel)
-    plt.xlabel(xlabel)
-    plt.xlim(0, 1.0)
-    plt.ylim(0, 0.25)
+    if ax121 is None:
+        plt.subplot(1, 2, 1)
 
-    plt.subplot(1, 2, 2)
-    plt.title('(b) error')
-    sns.kdeplot(prediction[error], uncertainty[error], n_levels=n_levels)
-    plt.ylabel(ylabel)
-    plt.xlabel(xlabel)
-    plt.xlim(0, 1.0)
-    plt.ylim(0, 0.25)
+    ax121.set_title('(a) correct')
+    sns.kdeplot(prediction[~error], uncertainty[~error],
+                n_levels=n_levels, ax=ax121)
+    ax121.set_ylabel(ylabel)
+    ax121.set_xlabel(xlabel)
+    ax121.set_xlim(0, 1.0)
+    ax121.set_ylim(0, 0.25)
+
+    if ax122 is None:
+        plt.subplot(1, 2, 2)
+
+    ax122.set_title('(b) error')
+    sns.kdeplot(prediction[error], uncertainty[error],
+                n_levels=n_levels, ax=ax122)
+    ax122.set_ylabel(ylabel)
+    ax122.set_xlabel(xlabel)
+    ax122.set_xlim(0, 1.0)
+    ax122.set_ylim(0, 0.25)
 
     sns.despine(offset=10, trim=True)
 
@@ -746,6 +753,65 @@ def bayes_vs_softmax():
     name = 'sigma_vs_soft_' + config['net'] + '_' + \
            str(config['disease_onset']) + '_' + config['dataset']
     return {name: fig}
+
+
+def sigma_vs_mu():
+    config = CONFIG['BCNN_moderateDR_Kaggle']
+    y = load_labels(config['LABELS_FILE'])
+    probs, probs_mc = load_predictions(config['predictions'])
+    y_bin, probs_bin, probs_mc_bin = detection_task(y, probs, probs_mc,
+                                                    config['disease_onset'])
+    pred_mean, pred_std = posterior_statistics(probs_mc_bin)
+    uncertainty = {'$\sigma_{pred}$': pred_std}
+    prediction = {'$\mu_{pred}$': pred_mean}
+
+    fig = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_WIDTH / 2.0))
+    ax131 = plt.subplot(131)
+    ax132 = plt.subplot(132)
+    prediction_vs_uncertainty(y_bin, uncertainty, prediction,
+                              title='', n_levels=250, ax121=ax131, ax122=ax132)
+
+    ax133 = plt.subplot(133)
+    ax133.set_title('(c) Decision referral')
+    colors = sns.color_palette()
+
+    uncertainties = {'$\sigma_{pred}$': pred_std,
+                     '$0.5-|\mu_{pred}-0.5|$':
+                     0.5 - abs(pred_mean - 0.5),
+                     '$0.5-|p(diseased|image)-0.5|$':
+                     0.5 - abs(probs_bin - 0.5)}
+    for i, (k, v) in enumerate(uncertainties.iteritems()):
+        v_tol, frac_retain, auc, auc_rand = \
+            performance_over_uncertainty_tol(v, y_bin, pred_mean,
+                                             roc_auc_score,
+                                             config['min_percentile'],
+                                             config['n_bootstrap'])
+        ax133.plot(frac_retain, auc['value'],
+                   label=k, color=colors[i], linewidth=2)
+        ax133.fill_between(frac_retain, auc['value'], auc['low'],
+                           color=colors[i], alpha=0.3)
+        ax133.fill_between(frac_retain, auc['high'], auc['value'],
+                           color=colors[i], alpha=0.3)
+
+    ax133.plot(frac_retain, auc_rand['value'],
+               label='random referral', color=colors[i + 1], linewidth=2)
+    ax133.fill_between(frac_retain, auc_rand['value'], auc_rand['low'],
+                       color=colors[i + 1], alpha=0.3)
+    ax133.fill_between(frac_retain, auc_rand['high'], auc_rand['value'],
+                       color=colors[i + 1], alpha=0.3)
+    ax133.set_xlim(config['min_percentile'] / 100., 1.0)
+    ax133.set_xlabel('retained data')
+    ax133.set_ylabel('auc')
+    ax133.legend(loc='best')
+
+    for ax in [ax131, ax132, ax133]:
+        x0, x1 = ax.get_xlim()
+        y0, y1 = ax.get_ylim()
+        ax.set_aspect((x1 - x0) / (y1 - y0))
+
+    sns.despine(offset=10, trim=True)
+
+    return {'sigma_vs_mu': fig}
 
 
 def class_conditional_uncertainty(y, uncertainty, disease_onset,
@@ -790,8 +856,8 @@ def main():
     #          y, config, label='$\sigma_{pred}$', save=True, format='.svg')
     # figures.append(f)
 
-    f = bayes_vs_softmax()
-    figures.append(f)
+    # f = bayes_vs_softmax()
+    # figures.append(f)
 
     # f = acc_rejection_figure(y_bin, pred_mean, uncertainties, config,
     #                          save=True, format='.pdf')
@@ -808,6 +874,9 @@ def main():
 
     # f = label_disagreement_figure()
     # figures.append(f)
+
+    f = sigma_vs_mu()
+    figures.append(f)
 
     # f = train_test_generalization()
     # figures.append(f)
