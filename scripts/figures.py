@@ -696,46 +696,56 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
     return {name: fig}
 
 
-def bayes_vs_softmax(y, mu_pred, sigma_pred, softmax,
-                     config, title='', n_levels=300,
-                     balance=False, save=False, format='.png'):
+def prediction_vs_uncertainty(y, uncertainty, prediction,
+                              title='', n_levels=250, balance=False):
+    ylabel = uncertainty.keys()[0]
+    uncertainty = uncertainty.values()[0]
+    xlabel = prediction.keys()[0]
+    prediction = prediction.values()[0]
 
     if balance:
-        y, (mu_pred, sigma_pred, softmax) = balance_classes(y, [mu_pred,
-                                                                sigma_pred,
-                                                                softmax])
+        y, (uncertainty, prediction) = balance_classes(y, [uncertainty,
+                                                           prediction])
 
-    # softmax
-    error = (y != (softmax >= 0.5))
-    fig_soft = plt.figure(figsize=(FIGURE_WIDTH,
-                                   FIGURE_WIDTH / 2.0))
+    error = (y != (prediction >= 0.5))
+
     plt.suptitle(title)
 
     plt.subplot(1, 2, 1)
     plt.title('(a) correct')
-    sns.kdeplot(softmax[~error], sigma_pred[~error], n_levels=n_levels)
-    plt.ylabel('$\sigma_{pred}$')
-    plt.xlabel('p(diseased | image)')
+    sns.kdeplot(prediction[~error], uncertainty[~error], n_levels=n_levels)
+    plt.ylabel(ylabel)
+    plt.xlabel(xlabel)
     plt.xlim(0, 1.0)
     plt.ylim(0, 0.25)
 
     plt.subplot(1, 2, 2)
     plt.title('(b) error')
-    sns.kdeplot(softmax[error], sigma_pred[error], n_levels=n_levels)
-    plt.ylabel('$\sigma_{pred}$')
-    plt.xlabel('p(diseased | image)')
+    sns.kdeplot(prediction[error], uncertainty[error], n_levels=n_levels)
+    plt.ylabel(ylabel)
+    plt.xlabel(xlabel)
     plt.xlim(0, 1.0)
     plt.ylim(0, 0.25)
 
     sns.despine(offset=10, trim=True)
 
-    name_soft = 'sigma_vs_soft_' + config['net'] + '_' + \
-        str(config['disease_onset']) + '_' + config['dataset']
 
-    if save:
-        fig_soft.savefig(name_soft + format)
+def bayes_vs_softmax():
+    config = CONFIG['BCNN_moderateDR_Kaggle']
+    y = load_labels(config['LABELS_FILE'])
+    probs, probs_mc = load_predictions(config['predictions'])
+    y_bin, probs_bin, probs_mc_bin = detection_task(y, probs, probs_mc,
+                                                    config['disease_onset'])
+    _, pred_std = posterior_statistics(probs_mc_bin)
+    uncertainty = {'$\sigma_{pred}$': pred_std}
+    prediction = {'p(diseased | image)': probs_bin}
 
-    return {name_soft: fig_soft}
+    fig = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_WIDTH / 2.0))
+    prediction_vs_uncertainty(y_bin, uncertainty, prediction,
+                              title='', n_levels=250)
+    name = 'sigma_vs_soft_' + config['net'] + '_' + \
+           str(config['disease_onset']) + '_' + config['dataset']
+    return {name: fig}
 
 
 def class_conditional_uncertainty(y, uncertainty, disease_onset,
@@ -780,10 +790,8 @@ def main():
     #          y, config, label='$\sigma_{pred}$', save=True, format='.svg')
     # figures.append(f)
 
-    # f = bayes_vs_softmax(y_bin, pred_mean, pred_std, probs_bin,
-    #                      config, title='', n_levels=250,
-    #                      balance=False, save=False, format='.png')
-    # figures.append(f)
+    f = bayes_vs_softmax()
+    figures.append(f)
 
     # f = acc_rejection_figure(y_bin, pred_mean, uncertainties, config,
     #                          save=True, format='.pdf')
@@ -792,8 +800,8 @@ def main():
     # ROC figure for comparison of different architectures, tasks
     # and true generalization performance
 
-    f = roc_auc_figure()
-    figures.append(f)
+    # f = roc_auc_figure()
+    # figures.append(f)
 
     # f = level_figure()
     # figures.append(f)
