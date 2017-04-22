@@ -159,6 +159,11 @@ def binary_probs(probs, min_positive_level=1):
         print('Unknown number of classes: %d. Aborting.' % n_classes)
 
 
+def binary_entropy(p):
+    assert p.ndim == 1
+    return -(p * np.log2(p + 1e-6) + (1 - p) * np.log2((1 - p) + 1e-6))
+
+
 def detection_task(y, probs, probs_mc, disease_level):
     y_diseased = binary_labels(y, disease_level)
     probs_diseased = binary_probs(probs, disease_level)
@@ -775,11 +780,11 @@ def sigma_vs_mu():
     ax133.set_title('(c) Decision referral')
     colors = sns.color_palette()
 
-    uncertainties = {'$\sigma_{pred}$': pred_std,
-                     '$0.5-|\mu_{pred}-0.5|$':
-                     0.5 - abs(pred_mean - 0.5),
-                     '$0.5-|p(diseased|image)-0.5|$':
-                     0.5 - abs(probs_bin - 0.5)}
+    uncertainties = OrderedDict([('$\sigma_{pred}$', pred_std),
+                                 ('$H(\mu_{pred})$',
+                                     binary_entropy(pred_mean)),
+                                 ('$H(p(diseased|image))$',
+                                     binary_entropy(probs_bin))])
     for i, (k, v) in enumerate(uncertainties.iteritems()):
         v_tol, frac_retain, auc, auc_rand = \
             performance_over_uncertainty_tol(v, y_bin, pred_mean,
