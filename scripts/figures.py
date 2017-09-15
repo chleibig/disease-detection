@@ -329,7 +329,7 @@ def acc_rejection_figure(y, y_score, uncertainties, config,
                        color=colors[i+1], alpha=0.3)
     ax122.fill_between(frac_retain, acc_rand['high'], acc_rand['value'],
                        color=colors[i+1], alpha=0.3)
-    ax122.set_xlabel('fraction of retained data')
+    ax122.set_xlabel('retained data')
     ax122.legend(loc='best')
 
     sns.despine(offset=10, trim=True)
