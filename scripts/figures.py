@@ -3,6 +3,7 @@
    classified"""
 from __future__ import print_function
 from collections import OrderedDict
+import h5py
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
@@ -86,6 +87,22 @@ CONFIG = {
          ('disease_onset', 2)] +
         DATA['KaggleDR'].items()),
 
+    'GP_mildDR_Kaggle': dict(
+        [('net', 'BCNN'),
+         ('dataset', 'Kaggle'),
+         ('predictions', 'data/processed/'
+          'GP/onset1/GPC_Results_MINIBATCH.mat'),
+         ('disease_onset', 1)] +
+        DATA['KaggleDR'].items()),
+
+    'GP_moderateDR_Kaggle': dict(
+        [('net', 'BCNN'),
+         ('dataset', 'Kaggle'),
+         ('predictions', 'data/processed/'
+          'GP/onset2/GPC_Results_MINIBATCH.mat'),
+         ('disease_onset', 2)] +
+        DATA['KaggleDR'].items()),
+
     'JFnet_mildDR_Kaggle': dict(
         [('net', 'JFnet'),
          ('dataset', 'Kaggle'),
@@ -140,6 +157,13 @@ def load_predictions(filename):
     assert ((0.0 <= probs) & (probs <= 1.0 + 1e-6)).all()
     assert ((0.0 <= probs_mc) & (probs_mc <= 1.0 + 1e-6)).all()
     return probs, probs_mc
+
+
+def load_predictions_gp(filename):
+    """Load mat files from Murat Seckin Ayhan <msayhan@gmail.com>r"""
+    with h5py.File(filename, 'r') as f:
+        probs = f.get('probs_te')[0, :]
+    return probs
 
 
 def binary_labels(labels, min_positive_level=1):
@@ -819,6 +843,92 @@ def sigma_vs_mu():
     return {'sigma_vs_mu': fig}
 
 
+def gp_figure():
+
+    def load(config_bcnn, config_gp):
+        y = load_labels(config_bcnn['LABELS_FILE'])
+        probs, probs_mc = load_predictions(config_bcnn['predictions'])
+        y_bin, _, probs_mc_bin = detection_task(y, probs, probs_mc,
+                                                config_bcnn['disease_onset'])
+        pred_mean, _ = posterior_statistics(probs_mc_bin)
+
+        probs_gp = load_predictions_gp(config_gp['predictions'])
+
+        return y_bin, pred_mean, probs_gp
+
+    def auc_plot(y_bin, pred_mean, probs_gp, ax=None, min_percentile=None,
+                 n_bootstrap=None):
+        traces = OrderedDict([('$H(\mu_{pred})$',
+                               (pred_mean, binary_entropy(pred_mean))),
+                              ('$H(p_{GP})$',
+                               (probs_gp, binary_entropy(probs_gp)))])
+        colors = sns.color_palette()
+        for i, (k, (p, u)) in enumerate(traces.iteritems()):
+            v_tol, frac_retain, auc, auc_rand = \
+                performance_over_uncertainty_tol(u, y_bin, p,
+                                                 roc_auc_score,
+                                                 min_percentile,
+                                                 n_bootstrap)
+            ax.plot(frac_retain, auc['value'],
+                    label=k, color=colors[i], linewidth=2)
+            ax.fill_between(frac_retain, auc['value'], auc['low'],
+                            color=colors[i], alpha=0.3)
+            ax.fill_between(frac_retain, auc['high'], auc['value'],
+                            color=colors[i], alpha=0.3)
+
+        ax.plot(frac_retain, auc_rand['value'],
+                label='random referral', color=colors[i + 1], linewidth=2)
+        ax.fill_between(frac_retain, auc_rand['value'], auc_rand['low'],
+                        color=colors[i + 1], alpha=0.3)
+        ax.fill_between(frac_retain, auc_rand['high'], auc_rand['value'],
+                        color=colors[i + 1], alpha=0.3)
+        ax.set_xlim(min_percentile / 100., 1.0)
+        ax.set_xlabel('retained data')
+        ax.set_ylabel('auc')
+        ax.legend(loc='best')
+
+    fig = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_WIDTH / 2.0))
+
+    ax221 = plt.subplot(221)
+    ax221.set_title('(a) Disease onset: mild DR')
+    y, probs_bcnn, probs_gp = load(CONFIG['BCNN_mildDR_Kaggle'],
+                                   CONFIG['GP_mildDR_Kaggle'])
+    auc_plot(y, probs_bcnn, probs_gp, ax=ax221,
+             min_percentile=DATA['KaggleDR']['min_percentile'],
+             n_bootstrap=DATA['KaggleDR']['n_bootstrap'])
+
+    ax223 = plt.subplot(223)
+    ax223.set_title('(c) Disease onset: mild DR')
+    sns.kdeplot(binary_entropy(probs_bcnn), binary_entropy(probs_gp),
+                n_levels=250, ax=ax223)
+    ax223.set_ylabel('GP uncertainty [$H(p_{GP})$]')
+    ax223.set_xlabel('BCNN uncertainty [$H(\mu_{pred})$]')
+
+    ax222 = plt.subplot(222)
+    ax222.set_title('(b) Disease onset: moderate DR')
+    y, probs_bcnn, probs_gp = load(CONFIG['BCNN_moderateDR_Kaggle'],
+                                   CONFIG['GP_moderateDR_Kaggle'])
+    auc_plot(y, probs_bcnn, probs_gp, ax=ax222,
+             min_percentile=DATA['KaggleDR']['min_percentile'],
+             n_bootstrap=DATA['KaggleDR']['n_bootstrap'])
+
+    ax224 = plt.subplot(224)
+    ax224.set_title('(d) Disease onset: moderate DR')
+    sns.kdeplot(binary_entropy(probs_bcnn), binary_entropy(probs_gp),
+                n_levels=250, ax=ax224)
+    ax224.set_ylabel('GP uncertainty [$H(p_{GP})$]')
+    ax224.set_xlabel('BCNN uncertainty [$H(\mu_{pred})$]')
+
+    for ax in [ax221, ax222, ax223, ax224]:
+        x0, x1 = ax.get_xlim()
+        y0, y1 = ax.get_ylim()
+        ax.set_aspect((x1 - x0) / (y1 - y0))
+
+    sns.despine(offset=10, trim=True)
+
+    return {'gp_figure': fig}
+
+
 def class_conditional_uncertainty(y, uncertainty, disease_onset,
                                   save=False, format='.svg'):
     plt.figure(figsize=(FIGURE_WIDTH / 2.0, FIGURE_WIDTH / 2.0))
@@ -880,7 +990,10 @@ def main():
     # f = label_disagreement_figure()
     # figures.append(f)
 
-    f = sigma_vs_mu()
+    # f = sigma_vs_mu()
+    # figures.append(f)
+
+    f = gp_figure()
     figures.append(f)
 
     # f = train_test_generalization()
