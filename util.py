@@ -1,6 +1,7 @@
 from __future__ import division
 
 from collections import namedtuple
+from pathos import multiprocessing
 import matplotlib.pyplot as plt
 import numpy as np
 import bokeh.plotting as bp
@@ -397,10 +398,15 @@ def bootstrap(data, fun, n_resamples=10000, alpha=0.05):
     def select(data, sample):
         return [d[sample] for d in data]
 
-    values = np.array([fun(*select(data, sample)) for sample in idx])
+    def evaluate(sample):
+        return fun(*select(data, sample))
 
-    idx = idx[np.argsort(values, axis=0)]
-    values = np.sort(values, axis=0)
+    pool = multiprocessing.Pool(multiprocessing.cpu_count())
+    values = pool.map(evaluate, idx)
+    pool.terminate()
+
+    idx = idx[np.argsort(values, axis=0, kind='mergesort')]
+    values = np.sort(values, axis=0, kind='mergesort')
 
     stat = namedtuple('stat', ['value', 'index'])
     low = stat(value=values[int((alpha/2.0)*n_resamples)],
