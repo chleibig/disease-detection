@@ -362,8 +362,8 @@ def roc_curve_plot(y_true, y_score, pos_label=1,
                             pos_label=pos_label)
     roc_auc = roc_auc_score(y_true, y_score)
 
-    legend = legend_prefix + ' (auc:%0.3f; CI:%0.3f-%0.3f)' \
-        % (roc_auc, low.value, high.value)
+    legend = legend_prefix #+ ' (auc:%0.3f; CI:%0.3f-%0.3f)' \
+        # % (roc_auc, low.value, high.value)
     print(legend)
 
     plt.plot(fdr, tdr, color=color,

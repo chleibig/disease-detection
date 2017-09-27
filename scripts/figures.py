@@ -76,6 +76,8 @@ CONFIG = {
          ('dataset', 'Kaggle'),
          ('predictions', 'data/processed/'
           '100_mc_KaggleDR_test_BayesJFnet17_392bea6.pkl'),
+         ('predictions_gp', 'data/processed/'
+          'GP/GPC_Results_MINIBATCH_KaggleDR_Onset1.mat'),
          ('disease_onset', 1)] +
         DATA['KaggleDR'].items()),
 
@@ -84,22 +86,8 @@ CONFIG = {
          ('dataset', 'Kaggle'),
          ('predictions', 'data/processed/'
           '100_mc_KaggleDR_test_bcnn2_b69aadd.pkl'),
-         ('disease_onset', 2)] +
-        DATA['KaggleDR'].items()),
-
-    'GP_mildDR_Kaggle': dict(
-        [('net', 'BCNN'),
-         ('dataset', 'Kaggle'),
-         ('predictions', 'data/processed/'
-          'GP/onset1/GPC_Results_MINIBATCH.mat'),
-         ('disease_onset', 1)] +
-        DATA['KaggleDR'].items()),
-
-    'GP_moderateDR_Kaggle': dict(
-        [('net', 'BCNN'),
-         ('dataset', 'Kaggle'),
-         ('predictions', 'data/processed/'
-          'GP/onset2/GPC_Results_MINIBATCH.mat'),
+         ('predictions_gp', 'data/processed/'
+          'GP/GPC_Results_MINIBATCH_KaggleDR_Onset2.mat'),
          ('disease_onset', 2)] +
         DATA['KaggleDR'].items()),
 
@@ -124,6 +112,8 @@ CONFIG = {
          ('dataset', 'Messidor'),
          ('predictions', 'data/processed/'
           '100_mc_Messidor_BayesJFnet17_392bea6.pkl'),
+         ('predictions_gp', 'data/processed/'
+          'GP/GPC_Results_MINIBATCH_Messidor_Onset1.mat'),
          ('disease_onset', 1)] +
         DATA['Messidor'].items()),
 
@@ -132,8 +122,10 @@ CONFIG = {
          ('dataset', 'Messidor'),
          ('predictions', 'data/processed/'
           '100_mc_Messidor_BayesianJFnet17_onset2_b69aadd.pkl'),
+         ('predictions_gp', 'data/processed/'
+          'GP/GPC_Results_MINIBATCH_Messidor_Onset2.mat'),
          ('disease_onset', 2)] +
-        DATA['Messidor'].items()),
+        DATA['Messidor'].items())
 }
 
 
@@ -162,7 +154,12 @@ def load_predictions(filename):
 def load_predictions_gp(filename):
     """Load mat files from Murat Seckin Ayhan <msayhan@gmail.com>r"""
     with h5py.File(filename, 'r') as f:
-        probs = f.get('probs_te')[0, :]
+        if 'KaggleDR' in filename:
+            probs = f.get('probs_te')[0, :]
+        elif 'Messidor' in filename:
+            probs = np.exp(f.get('lp_MESS')[0, :])
+        else:
+            raise ValueError('Unsupported file: {}'.format(filename))
     return probs
 
 
@@ -492,11 +489,21 @@ def roc_auc_subplot(y, y_score, uncertainties, config,
                        config['dataset']))
 
     for i, (k, v) in enumerate(uncertainties.iteritems()):
-        v_tol, frac_retain, auc, auc_rand = \
-            performance_over_uncertainty_tol(v, y, y_score,
-                                             roc_auc_score,
-                                             config['min_percentile'],
-                                             config['n_bootstrap'])
+        filename = 'bt' + str(config['n_bootstrap']) + '_' + \
+            k.replace(' ', '') + '_' + config['net'] + '_' + \
+            str(config['disease_onset']) + '_' + config['dataset'] + '.npz'
+        if os.path.exists(filename):
+            data = np.load(filename)
+            v_tol, frac_retain, auc, auc_rand = data['v_tol'], \
+                data['frac_retain'], data['auc'], data['auc_rand']
+        else:
+            v_tol, frac_retain, auc, auc_rand = \
+                performance_over_uncertainty_tol(v, y, y_score,
+                                                 roc_auc_score,
+                                                 config['min_percentile'],
+                                                 config['n_bootstrap'])
+            np.savez(filename, v_tol=v_tol, frac_retain=frac_retain,
+                     auc=auc, auc_rand=auc_rand)
 
         ax121.plot(frac_retain, auc['value'],
                    label=k, color=colors[i], linewidth=2)
@@ -505,16 +512,32 @@ def roc_auc_subplot(y, y_score, uncertainties, config,
         ax121.fill_between(frac_retain, auc['high'], auc['value'],
                            color=colors[i], alpha=0.3)
 
-        ax122
-        fractions = [0.9, 0.8, 0.7]
-        for j, f in enumerate(fractions):
-            thr = v_tol[frac_retain >= f][0]
-            roc_curve_plot(y[v <= thr],
-                           y_score[v <= thr],
-                           color=colors[j+1],
-                           legend_prefix='%d%% data retained, %s' % (f * 100,
-                                                                     k),
-                           n_bootstrap=config['n_bootstrap'])
+        if k == 'MC dropout':
+            # plot exemplary roc curves
+            ax122
+            fractions = [0.9, 0.8, 0.7]
+            for j, f in enumerate(fractions):
+                thr = v_tol[frac_retain >= f][0]
+                roc_curve_plot(y[v <= thr],
+                               y_score[v <= thr],
+                               color=colors[j+4],
+                               legend_prefix='%d%% data retained, %s'
+                               % (f * 100, k),
+                               n_bootstrap=config['n_bootstrap'])
+        else:
+            # print confidence intervals for table 1
+            fractions = [0.9, 0.8, 0.7]
+            for j, f in enumerate(fractions):
+                thr = v_tol[frac_retain >= f][0]
+                low, high = bootstrap([y[v <= thr], y_score[v <= thr]],
+                                      roc_auc_score,
+                                      n_resamples=config['n_bootstrap'],
+                                      alpha=0.05)
+                roc_auc = roc_auc_score(y[v <= thr], y_score[v <= thr])
+                msg = '%d%% data retained, %s' % (f * 100, k)
+                msg += ' (auc:%0.3f; CI:%0.3f-%0.3f)' \
+                    % (roc_auc, low.value, high.value)
+                print(msg)
 
     ax121.plot(frac_retain, auc_rand['value'],
                label='random referral', color=colors[i+1], linewidth=2)
@@ -528,7 +551,7 @@ def roc_auc_subplot(y, y_score, uncertainties, config,
     ax121.legend(loc='best')
 
     ax122
-    roc_curve_plot(y, y_score, color=colors[0],
+    roc_curve_plot(y, y_score, color=colors[-1],
                    legend_prefix='no referral',
                    recommendation=True,
                    n_bootstrap=config['n_bootstrap'])
@@ -542,7 +565,7 @@ def roc_auc_subplot(y, y_score, uncertainties, config,
 
     if save and fig is not None:
         name = 'roc_' + config['net'] + '_' + str(config['disease_onset']) + \
-               '_' + config['dataset']
+            '_' + config['dataset']
         fig.savefig(name + format)
         return {name: fig}
 
@@ -562,7 +585,10 @@ def roc_auc_figure():
         y_bin, probs_bin, probs_mc_bin = detection_task(
             y, probs, probs_mc, config['disease_onset'])
         pred_mean, pred_std = posterior_statistics(probs_mc_bin)
-        uncertainties = {'$\sigma_{pred}$': pred_std}
+        probs_gp = load_predictions_gp(config['predictions_gp'])
+        uncertainties = {'MC dropout': pred_std,
+                         'GP': binary_entropy(probs_gp),
+                         'standard dropout': binary_entropy(probs_bin)}
 
         ax121 = plt.subplot(2, 4, 2 * i + 1)
         ax122 = plt.subplot(2, 4, 2 * i + 2)
@@ -573,9 +599,7 @@ def roc_auc_figure():
                         ax122=ax122)
         ax121.set_title('')
         ax121.set_title(titles[i], loc='left')
-        ax121.get_legend().remove()
         ax122.set_title('')
-        ax122.get_legend().remove()
         ax122.set_xlim(0.0, 0.5)
         ax122.set_ylim(0.5, 1.0)
 
@@ -623,7 +647,7 @@ def train_test_generalization():
     sns.despine(offset=10, trim=True)
 
     name = 'train_test_' + config['net'] + '_' + \
-           str(config['disease_onset']) + '_' + config['dataset']
+        str(config['disease_onset']) + '_' + config['dataset']
 
     fig.savefig(name + '.pdf')
 
@@ -717,7 +741,7 @@ def fig1(y, y_score, images, uncertainty, probs_mc_diseased,
     sns.despine(offset=10, trim=True)
 
     name = 'fig1_' + config['net'] + '_' + str(config['disease_onset']) + \
-           '_' + config['dataset']
+        '_' + config['dataset']
 
     if save:
         fig.savefig(name + format)
@@ -780,7 +804,7 @@ def bayes_vs_softmax():
     prediction_vs_uncertainty(y_bin, uncertainty, prediction,
                               title='', n_levels=250)
     name = 'sigma_vs_soft_' + config['net'] + '_' + \
-           str(config['disease_onset']) + '_' + config['dataset']
+        str(config['disease_onset']) + '_' + config['dataset']
     return {name: fig}
 
 
@@ -806,9 +830,9 @@ def sigma_vs_mu():
 
     uncertainties = OrderedDict([('$\sigma_{pred}$', pred_std),
                                  ('$H(\mu_{pred})$',
-                                     binary_entropy(pred_mean)),
+                                  binary_entropy(pred_mean)),
                                  ('$H(p(diseased|image))$',
-                                     binary_entropy(probs_bin))])
+                                  binary_entropy(probs_bin))])
     for i, (k, v) in enumerate(uncertainties.iteritems()):
         v_tol, frac_retain, auc, auc_rand = \
             performance_over_uncertainty_tol(v, y_bin, pred_mean,
@@ -981,8 +1005,8 @@ def main():
     # ROC figure for comparison of different architectures, tasks
     # and true generalization performance
 
-    # f = roc_auc_figure()
-    # figures.append(f)
+    f = roc_auc_figure()
+    figures.append(f)
 
     # f = level_figure()
     # figures.append(f)
@@ -993,8 +1017,8 @@ def main():
     # f = sigma_vs_mu()
     # figures.append(f)
 
-    f = gp_figure()
-    figures.append(f)
+    # f = gp_figure()
+    # figures.append(f)
 
     # f = train_test_generalization()
     # figures.append(f)
