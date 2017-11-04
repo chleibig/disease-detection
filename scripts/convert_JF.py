@@ -106,8 +106,9 @@ def contrast_enhance(im, radius):
 
 def get_convert_fname(fname, extension, directory, convert_directory):
     source_extension = fname.split('.')[-1]
-    return fname.replace(source_extension, extension).replace(directory,
-                                                            convert_directory)
+    return fname.replace(source_extension,
+                         extension).replace(directory,
+                                            convert_directory)
 
 
 def create_dirs(paths):

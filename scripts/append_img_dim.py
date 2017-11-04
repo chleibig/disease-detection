@@ -34,5 +34,6 @@ def main(labels, path, extension):
 
     df.to_csv(labels.replace('.csv', '_wh.csv'), index=False)
 
+
 if __name__ == '__main__':
     main()

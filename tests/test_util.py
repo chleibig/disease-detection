@@ -6,6 +6,7 @@ from numpy.testing import assert_almost_equal
 
 
 class TestQuadraticWeightedKappa(unittest.TestCase):
+
     def test_quadratic_weighted_kappa(self):
         size = 10
         human_labels = randint(5, size=size)

@@ -24,7 +24,7 @@ pred_std_imagenet_1 = pred_imagenet_1['stoch_out'].std(axis=-1)[:, 1]
 pred_std_kaggle_2 = pred_kaggle_2['stoch_out'].std(axis=-1)[:, 1]
 pred_std_imagenet_2 = pred_imagenet_2['stoch_out'].std(axis=-1)[:, 1]
 
-plt.figure(figsize=(A4_WIDTH, A4_WIDTH//2))
+plt.figure(figsize=(A4_WIDTH, A4_WIDTH // 2))
 
 plt.subplot(121)
 plt.title('(a) DNN for disease onset 1')

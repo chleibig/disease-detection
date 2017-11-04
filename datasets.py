@@ -361,9 +361,11 @@ class Messidor(KaggleDR):
                                    'level': pd.Series(dtype='int32')})
             filenames = glob.glob('data/messidor/Annotation*Base*.xls')
             for fn in filenames:
-                df = pd.read_excel(fn, converters={'Retinopathy grade': np.int32})
+                df = pd.read_excel(fn,
+                                   converters={'Retinopathy grade': np.int32})
                 chunk = pd.DataFrame(
-                    {'image': df['Image name'].apply(lambda x: x.split('.tif')[0]),
+                    {'image': df['Image name'].apply(lambda x:
+                                                     x.split('.tif')[0]),
                      'level': df['Retinopathy grade']})
                 labels = labels.append(chunk)
             labels.to_csv(labels_file, index=False)
@@ -427,6 +429,7 @@ class DatasetImageDataGenerator(ImageDataGenerator):
 
 class DatasetIterator(object):
     """Inspired by keras.preprocessing.image.(NumpyArray)Iterator"""
+
     def __init__(self, dataset, indices, image_data_generator,
                  target_size=(512, 512),
                  dim_ordering='default',

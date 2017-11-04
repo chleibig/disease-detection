@@ -221,7 +221,7 @@ def accuracy(y_true, probs):
 
 
 def rel_freq(y, k):
-    return (y == k).sum()/float(len(y))
+    return (y == k).sum() / float(len(y))
 
 
 def contralateral_agreement(y, config):
@@ -426,9 +426,9 @@ def label_disagreement_subplot(y, uncertainty, config, ax=None):
 
     tol, frac_retain, accept_idx = sample_rejection(uncertainty, 0.1)
 
-    p_referred = np.array([sum((~accept) & (disagreeing))/float(sum(~accept))
+    p_referred = np.array([sum((~accept) & (disagreeing)) / float(sum(~accept))
                            for accept in accept_idx])
-    p_retained = np.array([sum((accept) & (disagreeing))/float(sum(accept))
+    p_retained = np.array([sum((accept) & (disagreeing)) / float(sum(accept))
                            for accept in accept_idx])
 
     with sns.axes_style('white'):
@@ -545,7 +545,7 @@ def roc_auc_subplot(y, y_score, uncertainties, config,
                        color=colors[i+1], alpha=0.3)
     ax121.fill_between(frac_retain, auc_rand['high'], auc_rand['value'],
                        color=colors[i+1], alpha=0.3)
-    ax121.set_xlim(config['min_percentile']/100., 1.0)
+    ax121.set_xlim(config['min_percentile'] / 100., 1.0)
     ax121.set_xlabel('retained data')
     ax121.set_ylabel('auc')
     ax121.legend(loc='best')
@@ -558,10 +558,10 @@ def roc_auc_subplot(y, y_score, uncertainties, config,
 
     x0, x1 = ax121.get_xlim()
     y0, y1 = ax121.get_ylim()
-    ax121.set_aspect((x1 - x0)/(y1 - y0))
+    ax121.set_aspect((x1 - x0) / (y1 - y0))
     x0, x1 = ax122.get_xlim()
     y0, y1 = ax122.get_ylim()
-    ax122.set_aspect((x1 - x0)/(y1 - y0))
+    ax122.set_aspect((x1 - x0) / (y1 - y0))
 
     if save and fig is not None:
         name = 'roc_' + config['net'] + '_' + str(config['disease_onset']) + \
@@ -981,26 +981,26 @@ def main():
 
     figures = []
 
-    # config = CONFIG['BCNN_mildDR_Kaggle']
+    config = CONFIG['BCNN_mildDR_Kaggle']
 
-    # y = load_labels(config['LABELS_FILE'])
-    # images = load_filenames(config['LABELS_FILE'])
-    # probs, probs_mc = load_predictions(config['predictions'])
-    # y_bin, probs_bin, probs_mc_bin = detection_task(
-    #     y, probs, probs_mc, config['disease_onset'])
-    # pred_mean, pred_std = posterior_statistics(probs_mc_bin)
-    # uncertainties = {'$\sigma_{pred}$': pred_std}
+    y = load_labels(config['LABELS_FILE'])
+    images = load_filenames(config['LABELS_FILE'])
+    probs, probs_mc = load_predictions(config['predictions'])
+    y_bin, probs_bin, probs_mc_bin = detection_task(
+        y, probs, probs_mc, config['disease_onset'])
+    pred_mean, pred_std = posterior_statistics(probs_mc_bin)
+    uncertainties = {'$\sigma_{pred}$': pred_std}
 
-    # f = fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin,
-    #          y, config, label='$\sigma_{pred}$', save=True, format='.svg')
-    # figures.append(f)
+    f = fig1(y_bin, pred_mean, images, pred_std, probs_mc_bin,
+             y, config, label='$\sigma_{pred}$', save=True, format='.svg')
+    figures.append(f)
 
-    # f = bayes_vs_softmax()
-    # figures.append(f)
+    f = bayes_vs_softmax()
+    figures.append(f)
 
-    # f = acc_rejection_figure(y_bin, pred_mean, uncertainties, config,
-    #                          save=True, format='.pdf')
-    # figures.append(f)
+    f = acc_rejection_figure(y_bin, pred_mean, uncertainties, config,
+                             save=True, format='.pdf')
+    figures.append(f)
 
     # ROC figure for comparison of different architectures, tasks
     # and true generalization performance
@@ -1008,20 +1008,20 @@ def main():
     f = roc_auc_figure()
     figures.append(f)
 
-    # f = level_figure()
-    # figures.append(f)
+    f = level_figure()
+    figures.append(f)
 
-    # f = label_disagreement_figure()
-    # figures.append(f)
+    f = label_disagreement_figure()
+    figures.append(f)
 
-    # f = sigma_vs_mu()
-    # figures.append(f)
+    f = sigma_vs_mu()
+    figures.append(f)
 
-    # f = gp_figure()
-    # figures.append(f)
+    f = gp_figure()
+    figures.append(f)
 
-    # f = train_test_generalization()
-    # figures.append(f)
+    f = train_test_generalization()
+    figures.append(f)
 
     return figures
 
