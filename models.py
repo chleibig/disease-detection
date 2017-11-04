@@ -255,9 +255,10 @@ class JFnet(Model):
         return np.vstack((width, height)).T / 700.
 
 
-class JFnetMono(Model):
+class BCNN(Model):
+    """Bayesian convolutional neural network (if p != 0 and on at test time)"""
 
-    def __init__(self, p_conv=0.0, last_layer='13', weights=None,
+    def __init__(self, p_conv=0.2, last_layer='13', weights=None,
                  n_classes=2):
         network = JFnet.build_model(width=512, height=512,
                                     filename=JFnet.ORIGINAL_WEIGHTS,
@@ -282,7 +283,7 @@ class JFnetMono(Model):
         if weights is not None:
             load_weights(network['logreg'], weights)
 
-        super(JFnetMono, self).__init__(net=network)
+        super(BCNN, self).__init__(net=network)
         self.inputs['X'] = self.net['0'].input_var
 
 
@@ -377,7 +378,7 @@ def weights2pickle(name='bcnn1', output_layer='logreg'):
         weights = 'models/weights_bcnn2_b69aadd.npz'
         outfile = 'bcnn2_b69aadd_' + output_layer + '.pkl'
 
-    model = JFnetMono(p_conv=0.2, last_layer='17', weights=weights)
+    model = BCNN(p_conv=0.2, last_layer='17', weights=weights)
 
     assert output_layer in model.net.keys(), \
         'Invalid output_layer %s' % output_layer

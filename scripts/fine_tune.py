@@ -19,7 +19,7 @@ if __name__ == '__main__':
     os.sys.path.append('.')
 
 import models
-from models import JFnet, JFnetMono
+from models import BCNN
 from datasets import KaggleDR
 from datasets import DatasetImageDataGenerator
 from training import generator_queue
@@ -89,7 +89,7 @@ best_auc = None
 ###########################################################################
 # Setup network
 
-model = JFnetMono(p_conv=p, last_layer=last_layer, weights=None, n_classes=2)
+model = BCNN(p_conv=p, last_layer=last_layer, weights=None, n_classes=2)
 
 l_out = model.get_output_layer()
 X = model.inputs['X']

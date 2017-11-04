@@ -91,8 +91,8 @@ def test_bcnn2_b69aadd():
                   preprocessing=KaggleDR.standard_normalize)
     pred_det = np.zeros((ds.n_samples, 2), dtype=np.float32)
 
-    model = models.JFnetMono(p_conv=0.2, last_layer='17',
-                             weights='models/weights_bcnn2_b69aadd.npz')
+    model = models.BCNN(p_conv=0.2, last_layer='17',
+                        weights='models/weights_bcnn2_b69aadd.npz')
 
     idx = 0
     for X, _ in ds.iterate_minibatches(np.arange(ds.n_samples),
@@ -139,8 +139,8 @@ def test_bcnn2_b69aadd_stochastic():
                   preprocessing=KaggleDR.standard_normalize)
     mc_samples = np.zeros((ds.n_samples, 2, 100), dtype=np.float32)
 
-    model = models.JFnetMono(p_conv=0.2, last_layer='17',
-                             weights='models/weights_bcnn2_b69aadd.npz')
+    model = models.BCNN(p_conv=0.2, last_layer='17',
+                        weights='models/weights_bcnn2_b69aadd.npz')
 
     idx = 0
     for X, _ in ds.iterate_minibatches(np.arange(ds.n_samples),
