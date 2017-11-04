@@ -489,7 +489,7 @@ def roc_auc_subplot(y, y_score, uncertainties, config,
                        config['dataset']))
 
     for i, (k, v) in enumerate(uncertainties.iteritems()):
-        filename = 'bt' + str(config['n_bootstrap']) + '_' + \
+        filename = 'data/processed/bt' + str(config['n_bootstrap']) + '_' + \
             k.replace(' ', '') + '_' + config['net'] + '_' + \
             str(config['disease_onset']) + '_' + config['dataset'] + '.npz'
         if os.path.exists(filename):
