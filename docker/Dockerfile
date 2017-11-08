@@ -15,8 +15,8 @@ RUN wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -
 COPY . /disease-detection
 RUN $CONDA_DIR/bin/conda env update -n root -f /disease-detection/environment.yml     
 
-COPY docker/.theanorc $HOME/.theanorc
-COPY docker/keras.json $HOME/.keras/keras.json
+COPY ./docker/.theanorc /root/.theanorc
+COPY ./docker/keras.json /root/.keras/keras.json
 
 WORKDIR /disease-detection
 
