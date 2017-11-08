@@ -1,5 +1,5 @@
-"""Crop and resize images according to Jeffrey de Fauw, save with desired
-extension.
+"""Image preprocessing: configurable combination of cropping, resizing and
+colour contrast enhancement.
 
 this code is based on:
 https://github.com/sveitser/kaggle_diabetic/blob/master/convert.py
@@ -136,41 +136,39 @@ def save(img, fname):
 
 
 @click.command()
-@click.option('--directory', default='data/train', show_default=True,
+@click.option('--source_dir', default='data/train', show_default=True,
               help="Directory with original images.")
-@click.option('--convert_directory', default='data/train_res',
+@click.option('--target_dir', default='data/train_res',
               show_default=True,
               help="Where to save converted images.")
-@click.option('--crop_size', default=256, show_default=True,
+@click.option('--crop_size', default=512, show_default=True,
               help="Size of converted images.")
 @click.option('--extension', default='jpeg', show_default=True,
               help="Filetype of converted images.")
-@click.option('--n_proc', default=2, show_default=True,
+@click.option('--n_proc', default=1, show_default=True,
               help="Number of processes for parallelization.")
 @click.option('--enhance_contrast', is_flag=True,
-              default=False, show_default=True,
+              default=True, show_default=True,
               help="Whether to use Benjamin Graham's contrast enhancement.")
 @click.option('--ignore_grayscale', is_flag=True,
               default=False, show_default=True,
               help="Whether to ignore grayscale images.")
-def main(directory, convert_directory, crop_size,
+def main(source_dir, target_dir, crop_size,
          extension, n_proc, enhance_contrast, ignore_grayscale):
-    """Image preprocessing according to Jeffrey de Fauw:
-       Crop and resize images, save with desired extension.
-    """
+    """Image conversion: crop, resize, (enhance colour contrast) and save."""
 
     try:
-        os.mkdir(convert_directory)
+        os.mkdir(target_dir)
     except OSError:
         pass
 
-    filenames = [os.path.join(dp, f) for dp, dn, fn in os.walk(directory)
+    filenames = [os.path.join(dp, f) for dp, dn, fn in os.walk(source_dir)
                  for f in fn if f.split('.')[-1] in white_list_extensions]
 
     assert filenames, "No valid filenames."
 
     print("Resizing images in {} to {}, this takes a while."
-          "".format(directory, convert_directory))
+          "".format(source_dir, target_dir))
 
     n = len(filenames)
     batchsize = 500
@@ -180,7 +178,7 @@ def main(directory, convert_directory, crop_size,
     args = []
 
     for f in filenames:
-        args.append((convert, (directory, convert_directory, f, crop_size,
+        args.append((convert, (source_dir, target_dir, f, crop_size,
                                extension, enhance_contrast, ignore_grayscale)))
 
     for i in range(batches):
