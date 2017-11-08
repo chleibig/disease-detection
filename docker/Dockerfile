@@ -30,4 +30,4 @@ WORKDIR $HOME/disease-detection
 ENV PATH $CONDA_DIR/bin:$PATH
 
 EXPOSE 8888
-CMD jupyter notebook --ip=0.0.0.0 --no-browser --allow-root
+CMD jupyter notebook --ip=0.0.0.0 --no-browser 
