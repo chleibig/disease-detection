@@ -1,7 +1,6 @@
 # Leveraging uncertainty information from deep neural networks for disease detection
 
-Code and models for [Christian Leibig, Vaneeda Allken, Murat Seckin Ayhan, Philipp Berens, Siegfried Wahl (2016)](https://www.biorxiv.org/content/early/2017/10/18/084210)
-developed at the ZEISS Vision Science Lab in collaboration with the Berenslab.
+Code and models for Christian Leibig, Vaneeda Allken, Murat Seckin Ayhan, Philipp Berens, Siegfried Wahl [(Scientific Reports, 2017)](https://www.nature.com/articles/s41598-017-17876-z) / [(preprint, 2016)](https://www.biorxiv.org/content/early/2017/10/18/084210), developed at the ZEISS Vision Science Lab in collaboration with the Berenslab @ University of Tuebingen.
 
 ## Getting started
 
